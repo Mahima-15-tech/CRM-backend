@@ -1,6 +1,6 @@
 // leadFormController.js (new file)
 const Lead = require("../models/LeadUpload");
-const Employee = require("../models/Employee");
+const Employee = require("../models/employee");
 
 // POST /api/lead-form/add
 exports.addLead = async (req, res) => {
