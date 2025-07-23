@@ -41,10 +41,15 @@ const app = express();
 
 
 
+const allowedOrigins = [
+  'http://localhost:5173',
+  'https://crm.technoviaan.com'
+];
+
 app.use(cors({
-  origin: 'http://localhost:5173', // your frontend's URL
-  credentials: true,               // if you're using cookies or sessions
-}))
+  origin: allowedOrigins,
+  credentials: true
+}));
 
 app.use(express.json());
 
