@@ -63,20 +63,27 @@ exports.uploadKYC = async (req, res) => {
       return res.status(400).json({ success: false, message: "File required" });
     }
 
-    // ✅ Upload to Cloudinary
-    const result = await cloudinary.uploader.upload(file.path, {
-      folder: 'kyc',
-      resource_type: "auto" // pdf bhi upload ho sake
+    // ✅ Upload buffer to Cloudinary using upload_stream
+    const result = await new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        {
+          folder: 'kyc',
+          resource_type: "auto"
+        },
+        (error, result) => {
+          if (error) return reject(error);
+          resolve(result);
+        }
+      );
+      stream.end(file.buffer); // send buffer data
     });
 
-    // ✅ Delete local file
-    fs.unlinkSync(file.path);
-
+    // ✅ Update DB
     const kyc = await KYC.findByIdAndUpdate(
       id,
       {
         status: "Complete",
-        fileUrl: result.secure_url, // use Cloudinary URL
+        fileUrl: result.secure_url,
       },
       { new: true }
     );
@@ -96,10 +103,6 @@ exports.uploadKYC = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
-
-
-
-
 
 
 exports.updateKYCStatus = async (req, res) => {

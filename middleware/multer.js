@@ -1,26 +1,25 @@
+// middleware/upload.js
 const multer = require("multer");
-const path = require("path");
 
-// Set storage
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, "uploads/kyc");
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
-  },
-});
+// memory storage (directly send to cloudinary etc.)
+const storage = multer.memoryStorage();
 
-// Filter only PDFs
+// allow pdf and image mimetypes
 const fileFilter = (req, file, cb) => {
-  if (file.mimetype === "application/pdf") {
+  const allowedTypes = [
+    "application/pdf",
+    "image/jpeg",
+    "image/png",
+    "image/webp"
+  ];
+
+  if (allowedTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error("Only PDF files are allowed!"), false);
+    cb(new Error("Only PDF and image files (jpeg, png, webp) are allowed!"), false);
   }
 };
 
-const upload = multer({ storage: storage, fileFilter });
+const upload = multer({ storage, fileFilter });
 
 module.exports = upload;

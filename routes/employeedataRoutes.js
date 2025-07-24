@@ -34,10 +34,15 @@ router.post('/employeedata', upload.single('photo'), async (req, res) => {
 
     // ✅ Upload photo if present
     if (req.file) {
-      const result = await cloudinary.uploader.upload(req.file.path, {
-        folder: 'employee_photos'
+      const result = await new Promise((resolve, reject) => {
+        cloudinary.uploader.upload_stream(
+          { folder: 'employee_photos', resource_type: 'auto' },
+          (error, result) => {
+            if (error) return reject(error);
+            resolve(result);
+          }
+        ).end(req.file.buffer);
       });
-      fs.unlinkSync(req.file.path); // delete local
       employeeData.photo = result.secure_url;
     }
 
@@ -77,6 +82,7 @@ router.post('/employeedata', upload.single('photo'), async (req, res) => {
   }
 });
 
+
 /* ------------------- Get All Employees ------------------- */
 /* ------------------- Get All Employees ------------------- */
 router.get('/employeedata', async (req, res) => {
@@ -103,10 +109,16 @@ router.put('/employeedata/:id', upload.single('photo'), async (req, res) => {
     const data = req.body;
 
     if (req.file) {
-      const result = await cloudinary.uploader.upload(req.file.path, {
-        folder: 'employee_photos'
+      // Upload buffer instead of file.path
+      const result = await new Promise((resolve, reject) => {
+        cloudinary.uploader.upload_stream(
+          { folder: 'employee_photos', resource_type: 'auto' },
+          (error, result) => {
+            if (error) return reject(error);
+            resolve(result);
+          }
+        ).end(req.file.buffer);
       });
-      fs.unlinkSync(req.file.path);
       data.photo = result.secure_url;
     }
 
@@ -134,6 +146,7 @@ router.put('/employeedata/:id', upload.single('photo'), async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 
 
