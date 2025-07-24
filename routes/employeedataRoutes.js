@@ -3,36 +3,38 @@ const router = express.Router();
 const EmployeeData = require('../models/employeedata');
 const User = require('../models/User');
 const bcrypt = require('bcryptjs');
-const multer = require('multer');
+// const multer = require('multer');
+const upload = require('../middleware/multer'); // ✅ use this instead of multer.diskStorage
+
 const path = require('path');
 const cloudinary = require('../cloudinaryConfig'); // path correct rakho
 const fs = require('fs');
 
 
-// Multer Setup
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, 'uploads/'); // Ensure this folder exists
-  },
-  filename: function (req, file, cb) {
-    const ext = path.extname(file.originalname);
-    cb(null, Date.now() + ext);
-  }
-});
+// // Multer Setup
+// const storage = multer.diskStorage({
+//   destination: function (req, file, cb) {
+//     cb(null, 'uploads/'); // Ensure this folder exists
+//   },
+//   filename: function (req, file, cb) {
+//     const ext = path.extname(file.originalname);
+//     cb(null, Date.now() + ext);
+//   }
+// });
 
-const upload = multer({ storage });
+// const upload = multer({ storage });
 
 /* -------------------- Create Employee + User -------------------- */
 router.post('/employeedata', upload.single('photo'), async (req, res) => {
   try {
     const employeeData = req.body;
 
-    // ✅ leadPermission as array
+    // convert to array if single string
     if (typeof employeeData.leadPermission === 'string') {
       employeeData.leadPermission = [employeeData.leadPermission];
     }
 
-    // ✅ Upload photo if present
+    // Upload photo
     if (req.file) {
       const result = await new Promise((resolve, reject) => {
         cloudinary.uploader.upload_stream(
@@ -43,21 +45,22 @@ router.post('/employeedata', upload.single('photo'), async (req, res) => {
           }
         ).end(req.file.buffer);
       });
+
       employeeData.photo = result.secure_url;
     }
 
-    // 1. Validation
+    // Validate
     if (!employeeData.username || !employeeData.password) {
       return res.status(400).json({ message: 'Username and password are required' });
     }
 
-    // 2. Username exists check
+    // Check duplicate user
     const userExists = await User.findOne({ username: employeeData.username });
     if (userExists) {
       return res.status(400).json({ message: 'Username already exists' });
     }
 
-    // 3. Hash password & save user
+    // Create user
     const hashedPassword = await bcrypt.hash(employeeData.password, 10);
     const user = new User({
       name: employeeData.name,
@@ -81,7 +84,6 @@ router.post('/employeedata', upload.single('photo'), async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
 
 /* ------------------- Get All Employees ------------------- */
 /* ------------------- Get All Employees ------------------- */
@@ -109,7 +111,6 @@ router.put('/employeedata/:id', upload.single('photo'), async (req, res) => {
     const data = req.body;
 
     if (req.file) {
-      // Upload buffer instead of file.path
       const result = await new Promise((resolve, reject) => {
         cloudinary.uploader.upload_stream(
           { folder: 'employee_photos', resource_type: 'auto' },
@@ -119,6 +120,7 @@ router.put('/employeedata/:id', upload.single('photo'), async (req, res) => {
           }
         ).end(req.file.buffer);
       });
+
       data.photo = result.secure_url;
     }
 
@@ -127,7 +129,7 @@ router.put('/employeedata/:id', upload.single('photo'), async (req, res) => {
         try {
           return JSON.parse(p);
         } catch (err) {
-          console.error("❌ Permission parse error:", err, p);
+          console.error("Permission parse error:", err, p);
           return null;
         }
       }).filter(Boolean);
@@ -143,9 +145,11 @@ router.put('/employeedata/:id', upload.single('photo'), async (req, res) => {
     const updated = await EmployeeData.findByIdAndUpdate(req.params.id, data, { new: true });
     res.json(updated);
   } catch (err) {
+    console.error("Update Employee Error:", err);
     res.status(500).json({ error: err.message });
   }
 });
+
 
 
 
