@@ -3,6 +3,9 @@ const KYC = require("../models/KYC");
 const Lead = require("../models/LeadUpload");
 const Invoice = require("../models/Invoice");
 const mongoose = require("mongoose");
+const cloudinary = require('../cloudinaryConfig'); // path correct rakho
+const fs = require('fs'); 
+
 
 exports.createKYCEntry = async (req, res) => {
   try {
@@ -60,36 +63,40 @@ exports.uploadKYC = async (req, res) => {
       return res.status(400).json({ success: false, message: "File required" });
     }
 
+    // ✅ Upload to Cloudinary
+    const result = await cloudinary.uploader.upload(file.path, {
+      folder: 'kyc',
+      resource_type: "auto" // pdf bhi upload ho sake
+    });
+
+    // ✅ Delete local file
+    fs.unlinkSync(file.path);
+
     const kyc = await KYC.findByIdAndUpdate(
       id,
       {
         status: "Complete",
-        fileUrl: `/uploads/${file.filename}`,
+        fileUrl: result.secure_url, // use Cloudinary URL
       },
       { new: true }
     );
 
-    // ✅ Update related invoice using leadId
-    // ✅ Update related invoice using leadId
-if (kyc && kyc.leadId) {
-  const updatedInvoice = await Invoice.findOne({ leadId: kyc.leadId });
+    // ✅ Update related invoice
+    if (kyc && kyc.leadId) {
+      const updatedInvoice = await Invoice.findOne({ leadId: kyc.leadId });
+      if (updatedInvoice) {
+        updatedInvoice.kycStatus = "Complete";
+        await updatedInvoice.save();
+      }
+    }
 
-  if (updatedInvoice) {
-    updatedInvoice.kycStatus = "Complete";
-    await updatedInvoice.save();
-    console.log("✅ Invoice updated with KYC Complete");
-  } else {
-    console.warn("⚠️ No invoice found for leadId:", kyc.leadId);
-  }
-}
-
-
-    res.json({ success: true });
+    res.json({ success: true, url: result.secure_url });
   } catch (err) {
     console.error("KYC upload error:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
 
 
 

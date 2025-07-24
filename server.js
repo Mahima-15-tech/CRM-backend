@@ -41,27 +41,27 @@ const app = express();
 
 
 
-// const allowedOrigins = [
-//   'http://localhost:5173',
-//   'https://crm.technoviaan.com'
-// ];
-
-// app.use(cors({
-//   origin: function(origin, callback) {
-//     if (!origin) return callback(null, true);  // allow non-browser requests
-//     if (allowedOrigins.includes(origin)) {
-//       return callback(null, true);
-//     } else {
-//       return callback(new Error('Not allowed by CORS'));
-//     }
-//   },
-//   credentials: true
-// }));
+const allowedOrigins = [
+  'http://localhost:5173',
+  'https://crm.technoviaan.com'
+];
 
 app.use(cors({
-  origin: 'https://crm.technoviaan.com',
+  origin: function(origin, callback) {
+    if (!origin) return callback(null, true);  // allow non-browser requests
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    } else {
+      return callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
 }));
+
+// app.use(cors({
+//   origin: 'https://crm.technoviaan.com',
+//   credentials: true
+// }));
 
 
 app.use(express.json());

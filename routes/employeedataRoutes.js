@@ -5,6 +5,9 @@ const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const path = require('path');
+const cloudinary = require('../cloudinaryConfig'); // path correct rakho
+const fs = require('fs');
+
 
 // Multer Setup
 const storage = multer.diskStorage({
@@ -21,20 +24,21 @@ const upload = multer({ storage });
 
 /* -------------------- Create Employee + User -------------------- */
 router.post('/employeedata', upload.single('photo'), async (req, res) => {
-  console.log('➡️ File received:', req.file);
-  console.log('➡️ Body received:', req.body);
-
   try {
     const employeeData = req.body;
 
-    // ✅ Ensure leadPermission is an array
+    // ✅ leadPermission as array
     if (typeof employeeData.leadPermission === 'string') {
       employeeData.leadPermission = [employeeData.leadPermission];
     }
 
-    // ✅ Attach photo if uploaded
+    // ✅ Upload photo if present
     if (req.file) {
-      employeeData.photo = `http://localhost:5000/uploads/${req.file.filename}`;
+      const result = await cloudinary.uploader.upload(req.file.path, {
+        folder: 'employee_photos'
+      });
+      fs.unlinkSync(req.file.path); // delete local
+      employeeData.photo = result.secure_url;
     }
 
     // 1. Validation
@@ -42,16 +46,14 @@ router.post('/employeedata', upload.single('photo'), async (req, res) => {
       return res.status(400).json({ message: 'Username and password are required' });
     }
 
-    // 2. Check if username already exists
+    // 2. Username exists check
     const userExists = await User.findOne({ username: employeeData.username });
     if (userExists) {
       return res.status(400).json({ message: 'Username already exists' });
     }
 
-    // 3. Hash the password
+    // 3. Hash password & save user
     const hashedPassword = await bcrypt.hash(employeeData.password, 10);
-
-    // 4. Create login user
     const user = new User({
       name: employeeData.name,
       username: employeeData.username,
@@ -59,11 +61,9 @@ router.post('/employeedata', upload.single('photo'), async (req, res) => {
       role: 'user',
       profileId: req.body.profile,
     });
-
-    employeeData.profile = req.body.profile;
     await user.save();
 
-    // 5. Save employee data
+    employeeData.profile = req.body.profile;
     delete employeeData.password;
     employeeData.user = user._id;
 
@@ -103,22 +103,23 @@ router.put('/employeedata/:id', upload.single('photo'), async (req, res) => {
     const data = req.body;
 
     if (req.file) {
-      data.photo = `http://localhost:5000/uploads/${req.file.filename}`;
+      const result = await cloudinary.uploader.upload(req.file.path, {
+        folder: 'employee_photos'
+      });
+      fs.unlinkSync(req.file.path);
+      data.photo = result.secure_url;
     }
 
-   if (req.body.permissions) {
-  data.permissions = req.body.permissions.map(p => {
-    try {
-      return JSON.parse(p);
-    } catch (err) {
-      console.error("❌ Permission parse error:", err, p);
-      return null;
+    if (req.body.permissions) {
+      data.permissions = req.body.permissions.map(p => {
+        try {
+          return JSON.parse(p);
+        } catch (err) {
+          console.error("❌ Permission parse error:", err, p);
+          return null;
+        }
+      }).filter(Boolean);
     }
-  }).filter(Boolean); // remove nulls
-}
-
-console.log("🧩 Permissions received:", data.permissions);
-
 
     if (data.username) {
       const user = await User.findOne({ username: data.username });
@@ -133,7 +134,6 @@ console.log("🧩 Permissions received:", data.permissions);
     res.status(500).json({ error: err.message });
   }
 });
-
 
 
 
