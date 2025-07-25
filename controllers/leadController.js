@@ -1931,7 +1931,8 @@ exports.getEmployeeLeadReport = async (req, res) => {
         console.log('Lead count:', leadCount);
 
         return {
-          _id: emp._id, // keep User _id for frontend
+          _id: emp._id,
+           employeeDataId: empData._id, // keep User _id for frontend
           name: emp.name,
           profile: emp.profileId?.name || "N/A",
           leads: leadCount,
