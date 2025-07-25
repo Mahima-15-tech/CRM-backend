@@ -259,23 +259,22 @@ exports.getSbaDashboard = async (req, res) => {
     const emp = await EmployeeData.findOne({ username });
     if (!emp) return res.status(404).json({ message: "Employee not found" });
 
-    const userId = emp.user; // 🟢 Correct: payments se link
+    const userId = emp.user;
     if (!userId) return res.status(404).json({ message: "Linked user not found for employee" });
 
-    // 🟢 Date Range: IST
+    // 🕒 Date range in IST
     const istOffset = 5.5 * 60 * 60 * 1000;
     const now = new Date();
     const istNow = new Date(now.getTime() + istOffset);
-    const istStart = new Date(istNow.getFullYear(), istNow.getMonth(), istNow.getDate());
-    const startOfDay = new Date(istStart.getTime() - istOffset);
-    const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000 - 1);
+    const istDateStr = istNow.toISOString().split('T')[0];
+    const startOfDay = new Date(`${istDateStr}T00:00:00+05:30`);
+    const endOfDay = new Date(`${istDateStr}T23:59:59+05:30`);
 
-    // 🟢 Payments: Achieved Target
+    // ✅ Payments
     const totalAchieved = await Payment.aggregate([
       { $match: { raisedBy: userId, status: "Approved" } },
       { $group: { _id: null, total: { $sum: "$totalPaid" } } }
     ]);
-
     const todayAchieved = await Payment.aggregate([
       {
         $match: {
@@ -286,72 +285,58 @@ exports.getSbaDashboard = async (req, res) => {
       },
       { $group: { _id: null, total: { $sum: "$totalPaid" } } }
     ]);
-
     const achievedTarget = totalAchieved[0]?.total || 0;
     const todaysSales = todayAchieved[0]?.total || 0;
 
-    // 🟢 Leads
-    const leads = await Lead.find({ employee: emp._id });
+    // ✅ Leads modified today (by employee)
+    const leadsModifiedToday = await Lead.countDocuments({
+      employee: emp._id,
+      isDeleted: false,
+      responseModifiedAt: { $gte: startOfDay, $lte: endOfDay }
+    });
 
-  // 🟢 Leads Modified Today
-const leadsModifiedToday = await Lead.countDocuments({
-  employee: userId,
-  updatedAt: { $gte: startOfDay, $lte: endOfDay }
-});
+    // ✅ Today's followups
+    const todayFollowUps = await TodaysFollowUp.countDocuments({
+      employee: emp._id,
+      date: { $gte: startOfDay, $lte: endOfDay }
+    });
 
+    // ✅ Running FT
+    const todayISO = istNow.toISOString().slice(0, 10);
+    const runningFT = await FTAssignment.countDocuments({
+      raisedBy: userId,
+      status: "Running",
+      fromDate: { $lte: todayISO },
+      toDate: { $gte: todayISO }
+    });
 
-    // ✅ 1️⃣ Todays FollowUps
- const todayFollowUps = await TodaysFollowUp.countDocuments({
-  employee: userId,
-  date: { $gte: startOfDay, $lte: endOfDay } // 👈 yeh `date` field se hoga
-});
+    // ✅ User lead balance (how many leads assigned to user, by type)
+    const userLeads = await Lead.find({ employee: emp._id, isDeleted: false });
+    const userLeadBalance = {
+      Premium: userLeads.filter(l => l.leadType === 'Premium').length,
+      HNI: userLeads.filter(l => l.leadType === 'HNI').length,
+      Web: userLeads.filter(l => l.leadType === 'Web').length,
+      Fresh: userLeads.filter(l => l.leadType === 'Fresh').length,
+      SEO: userLeads.filter(l => l.leadType === 'SEO').length,
+    };
 
+    // ✅ Pool leads balance (same as admin)
+    const poolLeadsBalance = await Lead.aggregate([
+      {
+        $match: {
+          employee: null,
+          isDeleted: false,
+          leadStatus: { $ne: "Deleted" }
+        }
+      },
+      { $group: { _id: "$leadType", count: { $sum: 1 } } }
+    ]);
+    const formattedPoolBalance = {};
+    poolLeadsBalance.forEach(lb => {
+      formattedPoolBalance[lb._id] = lb.count;
+    });
 
-   // ✅ RUNNING FT
-// const istNow = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
-const todayISO = istNow.toISOString().slice(0, 10);
-
-const runningFT = await FTAssignment.countDocuments({
-  raisedBy: userId,
-  status: "Running",
-  fromDate: { $lte: todayISO },
-  toDate: { $gte: todayISO }
-});
-
-
-
-    // ✅ 3️⃣ Lead Balance
-// 👇 Ye admin jaise hi same logic
-const poolLeadsBalance = await Lead.aggregate([
-  {
-    $match: {
-      employee: null,
-      leadStatus: { $ne: "Deleted" }
-    }
-  },
-  {
-    $group: {
-      _id: "$leadType",
-      count: { $sum: 1 }
-    }
-  }
-]);
-
-const formattedPoolBalance = {};
-poolLeadsBalance.forEach(lb => {
-  formattedPoolBalance[lb._id] = lb.count;
-});
-
-const userLeadBalance = {
-  Premium: leads.filter(l => l.leadType === 'Premium').length,
-  HNI: leads.filter(l => l.leadType === 'HNI').length,
-  Web: leads.filter(l => l.leadType === 'Web').length,
-  Fresh: leads.filter(l => l.leadType === 'Fresh').length,
-  SEO: leads.filter(l => l.leadType === 'SEO').length,
-};
-
-
-    // ✅ Send Final Response
+    // ✅ Send response
     res.status(200).json({
       totalTarget: emp.target || 0,
       achievedTarget,
@@ -362,118 +347,94 @@ const userLeadBalance = {
       connectedCalls: 0,
       todayCalling: "00:00:00",
       monthlyCalling: "00:00:00",
-      leadBalance: userLeadBalance,  
+      leadBalance: userLeadBalance,
       poolLeads: formattedPoolBalance,
     });
 
   } catch (err) {
-    console.error("SBA Dashboard Error:", err);
+    console.error("🔥 SBA Dashboard Error:", err);
     res.status(500).json({ message: "Something went wrong" });
   }
 };
-
 
 // controllers/dashboardController.js
 
 // controllers/dashboardController.js
 exports.getArmDashboard = async (req, res) => {
   try {
-    const userId = req.user._id;  // User._id
+    const userId = req.user._id; 
     const arm = await EmployeeData.findOne({ user: userId });
-    if (!arm) return res.status(404).json({ message: "ARM employee not found" });
+    if (!arm) return res.status(404).json({ message: "ARM not found" });
 
-    const armEmpId = arm._id;      // EmployeeData._id
-    const username = arm.username;
-
-    // Team info
-    const team = await Team.findOne({ leader: username });
-    const teammateUsernames = team ? team.teammates : [];
+    const armEmpId = arm._id;
+    const team = await Team.findOne({ leader: arm.username });
+    const teammateUsernames = team?.teammates || [];
 
     const teammatesEmp = await EmployeeData.find({ username: { $in: teammateUsernames } });
     const teammatesUserIds = teammatesEmp.map(e => e.user).filter(Boolean);
     const teamUserIds = [userId, ...teammatesUserIds];
     const teamEmployeeIds = [armEmpId, ...teammatesEmp.map(e => e._id)];
 
-    // Date (IST)
+    // Date range IST
     const now = new Date();
     const istOffset = 5.5 * 60 * 60 * 1000;
     const istNow = new Date(now.getTime() + istOffset);
     const startOfDay = new Date(istNow.setHours(0,0,0,0) - istOffset);
     const endOfDay = new Date(startOfDay.getTime() + 24*60*60*1000 -1);
-    const todayISO = new Date().toISOString().slice(0,10);
+    const todayISO = istNow.toISOString().slice(0,10);
 
-    // === Individual Data ===
+    // === Individual
     const [
-      selfAchievedData,
-      todaySalesData,
+      selfAchievedAgg,
+      todaySalesAgg,
       todayFollowUps,
       runningFT,
       leadsModified
     ] = await Promise.all([
-      Payment.aggregate([
-        { $match: { raisedBy: userId, status: "Approved" }},
-        { $group: { _id: null, total: { $sum: "$totalPaid" }}}
-      ]),
-      Payment.aggregate([
-        { $match: { raisedBy: userId, status: "Approved", date: { $gte: startOfDay, $lte: endOfDay }}},
-        { $group: { _id: null, total: { $sum: "$totalPaid" }}}
-      ]),
+      Payment.aggregate([{ $match: { raisedBy: userId, status: "Approved" } }, { $group: { _id: null, total: { $sum: "$totalPaid" } } }]),
+      Payment.aggregate([{ $match: { raisedBy: userId, status: "Approved", date: { $gte: startOfDay, $lte: endOfDay } } }, { $group: { _id: null, total: { $sum: "$totalPaid" } } }]),
       TodaysFollowUp.countDocuments({ employee: userId, date: { $gte: startOfDay, $lte: endOfDay } }),
-      FTAssignment.countDocuments({
-        raisedBy: userId, status: "Running", fromDate: { $lte: todayISO }, toDate: { $gte: todayISO }
-      }),
-      Lead.countDocuments({ employee: userId, updatedAt: { $gte: startOfDay, $lte: endOfDay } }),
+      FTAssignment.countDocuments({ raisedBy: userId, status: "Running", fromDate: { $lte: todayISO }, toDate: { $gte: todayISO } }),
+      Lead.countDocuments({ employee: armEmpId, updatedAt: { $gte: startOfDay, $lte: endOfDay } }),
     ]);
+    const selfAchieved = selfAchievedAgg[0]?.total || 0;
+    const todaySales = todaySalesAgg[0]?.total || 0;
 
-    const selfAchieved = selfAchievedData[0]?.total || 0;
-    const todaySales = todaySalesData[0]?.total || 0;
-
-    // === Team Data ===
+    // === Team
     const [
-      teamAchievedData,
-      teamTodaySalesData,
+      teamAchievedAgg,
+      teamTodaySalesAgg,
       teamTodayFollowUps,
       teamRunningFT,
       teamLeadsModified
     ] = await Promise.all([
-      Payment.aggregate([
-        { $match: { raisedBy: { $in: teamUserIds }, status: "Approved" }},
-        { $group: { _id: null, total: { $sum: "$totalPaid" }}}
-      ]),
-      Payment.aggregate([
-        { $match: { raisedBy: { $in: teamUserIds }, status: "Approved", date: { $gte: startOfDay, $lte: endOfDay }}},
-        { $group: { _id: null, total: { $sum: "$totalPaid" }}}
-      ]),
+      Payment.aggregate([{ $match: { raisedBy: { $in: teamUserIds }, status: "Approved" } }, { $group: { _id: null, total: { $sum: "$totalPaid" } } }]),
+      Payment.aggregate([{ $match: { raisedBy: { $in: teamUserIds }, status: "Approved", date: { $gte: startOfDay, $lte: endOfDay } } }, { $group: { _id: null, total: { $sum: "$totalPaid" } } }]),
       TodaysFollowUp.countDocuments({ employee: { $in: teamUserIds }, date: { $gte: startOfDay, $lte: endOfDay } }),
-      FTAssignment.countDocuments({
-        raisedBy: { $in: teamUserIds }, status: "Running", fromDate: { $lte: todayISO }, toDate: { $gte: todayISO }
-      }),
-      Lead.countDocuments({ employee: { $in: teamUserIds }, updatedAt: { $gte: startOfDay, $lte: endOfDay } }),
+      FTAssignment.countDocuments({ raisedBy: { $in: teamUserIds }, status: "Running", fromDate: { $lte: todayISO }, toDate: { $gte: todayISO } }),
+      Lead.countDocuments({ employee: { $in: teamEmployeeIds }, updatedAt: { $gte: startOfDay, $lte: endOfDay } }),
     ]);
+    const teamAchieved = teamAchievedAgg[0]?.total || 0;
+    const teamTodaySales = teamTodaySalesAgg[0]?.total || 0;
 
-    const teamAchieved = teamAchievedData[0]?.total || 0;
-    const teamTodaySales = teamTodaySalesData[0]?.total || 0;
-
-    // === Individual lead balance (use employee: armEmpId) ===
+    // === Lead balance
     const userLeads = await Lead.find({ employee: armEmpId, isDeleted: false });
     const userLeadBalance = {
       Premium: userLeads.filter(l => l.leadType === 'Premium').length,
       Fresh: userLeads.filter(l => l.leadType === 'Fresh').length,
       HNI: userLeads.filter(l => l.leadType === 'HNI').length,
       SEO: userLeads.filter(l => l.leadType === 'SEO').length,
-      Web: userLeads.filter(l => l.leadType === 'Web').length
+      Web: userLeads.filter(l => l.leadType === 'Web').length,
     };
 
-    // === Pool leads ===
     const poolLeads = await Lead.aggregate([
-      { $match: { employee: null, leadStatus: { $ne: "Deleted" } }},
-      { $group: { _id: "$leadType", count: { $sum: 1 } }}
+      { $match: { employee: null, leadStatus: { $ne: "Deleted" }, isDeleted: false } },
+      { $group: { _id: "$leadType", count: { $sum: 1 } } }
     ]);
     const poolLeadsBalance = {};
-    poolLeads.forEach(item => { poolLeadsBalance[item._id] = item.count; });
+    poolLeads.forEach(p => { poolLeadsBalance[p._id] = p.count; });
 
-    // ✅ Response
-    res.status(200).json({
+    res.json({
       selfTarget: arm.target || 0,
       selfAchieved,
       todaySales,
@@ -488,19 +449,18 @@ exports.getArmDashboard = async (req, res) => {
       teamRunningFT,
       teamLeadsModified,
 
-      leadBalance: userLeadBalance,
-      poolLeads: poolLeadsBalance,
-
       connectedCalls: 0,
       todayCalling: "00:00:00",
-      monthlyCalling: "00:00:00"
+      monthlyCalling: "00:00:00",
+      leadBalance: userLeadBalance,
+      poolLeads: poolLeadsBalance
     });
-
   } catch (err) {
     console.error("🔥 ARM Dashboard Error:", err);
     res.status(500).json({ message: "Something went wrong" });
   }
 };
+
 
 
 
@@ -624,122 +584,89 @@ exports.getArmDashboard = async (req, res) => {
 
 exports.getTlDashboard = async (req, res) => {
   try {
-    const userId = req.user._id; // User._id
-    console.log("✅ userId:", userId);
-
+    const userId = req.user._id;
     const tl = await EmployeeData.findOne({ user: userId });
-    if (!tl) return res.status(404).json({ message: "TL employee not found" });
+    if (!tl) return res.status(404).json({ message: "TL not found" });
 
-    const username = tl.username;
-    console.log("✅ TL username:", username);
-
-    // === Team info ===
-    const team = await Team.findOne({ leader: username });
-    const teammateUsernames = team ? team.teammates : [];
-    console.log("✅ teammateUsernames:", teammateUsernames);
+    const team = await Team.findOne({ leader: tl.username });
+    const teammateUsernames = team?.teammates || [];
 
     const teammatesEmp = await EmployeeData.find({ username: { $in: teammateUsernames } });
     const teammatesUserIds = teammatesEmp.map(e => e.user).filter(Boolean);
     const teamUserIds = [userId, ...teammatesUserIds];
     const teamEmployeeIds = [tl._id, ...teammatesEmp.map(e => e._id)];
 
-    console.log("✅ teammatesUserIds:", teammatesUserIds);
-    console.log("✅ teamUserIds:", teamUserIds);
-    console.log("✅ teamEmployeeIds:", teamEmployeeIds);
-
-    // === Date (IST) ===
     const now = new Date();
     const istOffset = 5.5 * 60 * 60 * 1000;
     const istNow = new Date(now.getTime() + istOffset);
     const startOfDay = new Date(istNow.setHours(0,0,0,0) - istOffset);
     const endOfDay = new Date(startOfDay.getTime() + 24*60*60*1000 -1);
     const todayISO = istNow.toISOString().slice(0,10);
-    console.log("✅ Date range:", startOfDay, endOfDay, "todayISO:", todayISO);
 
-    // === Individual Data ===
+    // === Individual
     const [
-      selfAchievedData,
-      todaySalesData,
+      selfAchieved,
+      todaySales,
       todayFollowUps,
       runningFT,
       leadsModified
     ] = await Promise.all([
-      Lead.countDocuments({ employee: userId, leadStatus: "Disposed" }),
-      Lead.countDocuments({ employee: userId, leadStatus: "Disposed", updatedAt: { $gte: startOfDay, $lte: endOfDay } }),
+      Lead.countDocuments({ employee: tl._id, leadStatus: "Disposed" }),
+      Lead.countDocuments({ employee: tl._id, leadStatus: "Disposed", updatedAt: { $gte: startOfDay, $lte: endOfDay } }),
       TodaysFollowUp.countDocuments({ employee: userId, date: { $gte: startOfDay, $lte: endOfDay } }),
-      FTAssignment.countDocuments({
-        raisedBy: userId, status: "Running", fromDate: { $lte: todayISO }, toDate: { $gte: todayISO }
-      }),
-      Lead.countDocuments({ employee: userId, updatedAt: { $gte: startOfDay, $lte: endOfDay } }),
+      FTAssignment.countDocuments({ raisedBy: userId, status: "Running", fromDate: { $lte: todayISO }, toDate: { $gte: todayISO } }),
+      Lead.countDocuments({ employee: tl._id, updatedAt: { $gte: startOfDay, $lte: endOfDay } }),
     ]);
 
-    console.log("✅ selfAchievedData:", selfAchievedData);
-    console.log("✅ todaySalesData:", todaySalesData);
-    console.log("✅ todayFollowUps:", todayFollowUps);
-    console.log("✅ leadsModified:", leadsModified);
-
-    // === Team Data ===
+    // === Team
     const [
-      teamAchievedData,
-      teamTodaySalesData,
+      teamAchieved,
+      teamTodaySales,
       teamTodayFollowUps,
       teamRunningFT,
       teamLeadsModified
     ] = await Promise.all([
-      Lead.countDocuments({ employee: { $in: teamUserIds }, leadStatus: "Disposed" }),
-      Lead.countDocuments({ employee: { $in: teamUserIds }, leadStatus: "Disposed", updatedAt: { $gte: startOfDay, $lte: endOfDay } }),
+      Lead.countDocuments({ employee: { $in: teamEmployeeIds }, leadStatus: "Disposed" }),
+      Lead.countDocuments({ employee: { $in: teamEmployeeIds }, leadStatus: "Disposed", updatedAt: { $gte: startOfDay, $lte: endOfDay } }),
       TodaysFollowUp.countDocuments({ employee: { $in: teamUserIds }, date: { $gte: startOfDay, $lte: endOfDay } }),
-      FTAssignment.countDocuments({
-        raisedBy: { $in: teamUserIds }, status: "Running", fromDate: { $lte: todayISO }, toDate: { $gte: todayISO }
-      }),
-      Lead.countDocuments({ employee: { $in: teamUserIds }, updatedAt: { $gte: startOfDay, $lte: endOfDay } }),
+      FTAssignment.countDocuments({ raisedBy: { $in: teamUserIds }, status: "Running", fromDate: { $lte: todayISO }, toDate: { $gte: todayISO } }),
+      Lead.countDocuments({ employee: { $in: teamEmployeeIds }, updatedAt: { $gte: startOfDay, $lte: endOfDay } }),
     ]);
 
-    console.log("✅ teamAchievedData:", teamAchievedData);
-    console.log("✅ teamTodaySalesData:", teamTodaySalesData);
-    console.log("✅ teamTodayFollowUps:", teamTodayFollowUps);
-    console.log("✅ teamLeadsModified:", teamLeadsModified);
-
-    // === Individual lead balance ===
-    const userLeads = await Lead.find({ employee: userId, isDeleted: false });
+    const userLeads = await Lead.find({ employee: tl._id, isDeleted: false });
     const userLeadBalance = {
       Premium: userLeads.filter(l => l.leadType === 'Premium').length,
       Fresh: userLeads.filter(l => l.leadType === 'Fresh').length,
       HNI: userLeads.filter(l => l.leadType === 'HNI').length,
       SEO: userLeads.filter(l => l.leadType === 'SEO').length,
-      Web: userLeads.filter(l => l.leadType === 'Web').length
+      Web: userLeads.filter(l => l.leadType === 'Web').length,
     };
-    console.log("✅ userLeadBalance:", userLeadBalance);
 
-    // === Pool leads ===
     const poolLeads = await Lead.aggregate([
-      { $match: { employee: null, leadStatus: { $ne: "Deleted" } }},
-      { $group: { _id: "$leadType", count: { $sum: 1 } }}
+      { $match: { employee: null, leadStatus: { $ne: "Deleted" }, isDeleted: false } },
+      { $group: { _id: "$leadType", count: { $sum: 1 } } }
     ]);
     const poolLeadsBalance = {};
-    poolLeads.forEach(item => { poolLeadsBalance[item._id] = item.count; });
-    console.log("✅ poolLeadsBalance:", poolLeadsBalance);
+    poolLeads.forEach(p => { poolLeadsBalance[p._id] = p.count; });
 
-    // === Response ===
-    res.status(200).json({
+    res.json({
       selfTarget: tl.target || 0,
-      selfAchieved: selfAchievedData || 0,
-      todaySales: todaySalesData || 0,
-      todayFollowUps: todayFollowUps || 0,
-      runningFT, // future
-      leadsModified: leadsModified || 0,
+      selfAchieved,
+      todaySales,
+      todayFollowUps,
+      runningFT,
+      leadsModified,
 
       teamTarget: team?.target || 0,
-      teamAchieved: teamAchievedData || 0,
-      teamTodaySales: teamTodaySalesData || 0,
-      teamTodayFollowUps: teamTodayFollowUps || 0,
-      teamRunningFT, // future
-      teamLeadsModified: teamLeadsModified || 0,
+      teamAchieved,
+      teamTodaySales,
+      teamTodayFollowUps,
+      teamRunningFT,
+      teamLeadsModified,
 
       connectedCalls: 0,
       todayCalling: "00:00:00",
       monthlyCalling: "00:00:00",
-
       leadBalance: userLeadBalance,
       poolLeads: poolLeadsBalance
     });
