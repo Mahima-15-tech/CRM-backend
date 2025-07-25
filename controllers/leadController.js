@@ -1860,21 +1860,27 @@ exports.getEmployeeLeadSummary = async (req, res) => {
 
     const responseCounts = {};
     const statusCounts = {};
-    let totalLeads = 0;
+
+    let totalLeads = leads.length;
     let clientCount = 0;
     let runningFTCount = 0;
+    let disposedCount = 0;
+    let deletedCount = 0;
 
     leads.forEach((lead) => {
+      // Count responses
       const response = lead.response || "Unknown";
       responseCounts[response] = (responseCounts[response] || 0) + 1;
 
+      // Count status
       const status = lead.leadStatus || "Unknown";
       statusCounts[status] = (statusCounts[status] || 0) + 1;
 
+      // Special counts
       if (status === "Client") clientCount++;
       if (lead.leadType === "FT") runningFTCount++;
-
-      totalLeads++;
+      if (status === "Disposed") disposedCount++;
+      if (status === "Deleted") deletedCount++;
     });
 
     res.json({
@@ -1882,7 +1888,9 @@ exports.getEmployeeLeadSummary = async (req, res) => {
         responseCounts,
         statusCounts,
         totalLeads,
-        runningFTCount, // ✅ added this line
+        runningFTCount,
+        disposedCount,
+        deletedCount
       },
       clientCount,
     });
@@ -1896,15 +1904,34 @@ exports.getEmployeeLeadSummary = async (req, res) => {
 
 
 
+
 exports.getEmployeeLeadReport = async (req, res) => {
   try {
     const employees = await User.find({ role: "user" }).populate("profileId", "name");
+    console.log('Users found:', employees.length);
 
     const report = await Promise.all(
       employees.map(async (emp) => {
-        const leadCount = await Lead.countDocuments({ assignedTo: emp._id });
+        console.log('Processing user:', emp.name, emp._id);
+
+        // EmployeeData find karo
+        const empData = await EmployeeData.findOne({ user: emp._id });
+        if (!empData) {
+          console.log(`No EmployeeData found for user: ${emp.name}`);
+          return {
+            _id: emp._id,
+            name: emp.name,
+            profile: emp.profileId?.name || "N/A",
+            leads: 0
+          };
+        }
+
+        console.log(`EmployeeData ID: ${empData._id}`);
+        const leadCount = await Lead.countDocuments({ assignedTo: empData._id });
+        console.log('Lead count:', leadCount);
+
         return {
-          _id: emp._id,
+          _id: emp._id, // keep User _id for frontend
           name: emp.name,
           profile: emp.profileId?.name || "N/A",
           leads: leadCount,
@@ -1912,12 +1939,14 @@ exports.getEmployeeLeadReport = async (req, res) => {
       })
     );
 
+    console.log('Final report:', report);
     res.json(report);
   } catch (err) {
     console.error("Employee report error:", err);
     res.status(500).json({ error: "Failed to generate report" });
   }
 };
+
 
 // Fetch leads by employee + response + optional source/date
 exports.getLeadsByResponse = async (req, res) => {
