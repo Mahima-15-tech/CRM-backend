@@ -12,59 +12,6 @@ const moment = require("moment");
 const User = require("../models/User");
 
 
-//   const { leadSource, employee, columnMap, leadType } = req.body;
-//   const map = JSON.parse(columnMap);
-//   const results = [];
-//   const duplicates = [];
-
-//   if (!leadSource && !employee) {
-//     return res.status(400).json({ error: "Please select either employee or lead source" });
-//   }
-
-//   let totalRows = 0;
-
-//   fs.createReadStream(req.file.path)
-//     .pipe(csv())
-//     .on("data", (row) => {
-//       totalRows++;
-
-//       const keys = Object.keys(row);
-//       const name = row[keys[map.name]]?.trim();
-//       const mobile = row[keys[map.mobile]]?.trim();
-
-//       if (!name || !mobile) return;
-
-//       if (results.find((r) => r.mobile === mobile)) {
-//         duplicates.push({ name, mobile });
-//       } else {
-//         results.push({
-//           name,
-//           email: row[keys[map.email]]?.trim() || "",
-//           mobile,
-//           city: row[keys[map.city]]?.trim() || "",
-//           address: row[keys[map.address]]?.trim() || "",
-//           segment: row[keys[map.segment]]?.trim() || "",
-//           occupation: row[keys[map.occupation]]?.trim() || "",
-//           investment: row[keys[map.investment]]?.trim() || "",
-//           leadType: leadType || "Fresh",
-//           leadSource: leadSource || null,
-//            employee: employeeData?._id || null,
-//           assignedTo: employeeData?._id || null
-//         });
-//       }
-//     })
-//     .on("end", async () => {
-//       await Lead.insertMany(results);
-//       res.json({
-//         success: true,
-//         totalLeadsInserted: results.length,
-//         duplicateLeads: duplicates,
-//         totalRows,
-//         skipped: totalRows - results.length - duplicates.length,
-//       });
-//     });
-// };
-
 exports.uploadLeads = async (req, res) => {
   const { leadSource, employee, columnMap, leadType } = req.body;
   const map = JSON.parse(columnMap);
