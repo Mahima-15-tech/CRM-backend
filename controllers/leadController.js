@@ -1574,21 +1574,23 @@ exports.permanentlyDeleteLeads = async (req, res) => {
 
 exports.unallotLeads = async (req, res) => {
   const { leadIds, newSourceId, deleteStory, deleteComment } = req.body;
-const ObjectId = require('mongoose').Types.ObjectId;
-
+  const ObjectId = require('mongoose').Types.ObjectId;
 
   if (!Array.isArray(leadIds) || leadIds.length === 0) {
     return res.status(400).json({ error: "No leads selected" });
   }
 
- const updateFields = {
-  assignedTo: null,
-  assignedDate: null,
-  response: null,
-  comment: "",
-  ...(newSourceId && { leadSource: new ObjectId(newSourceId) }) // 👈 convert to ObjectId
-};
+  const updateFields = {
+    assignedTo: null,
+    assignedDate: null,
+    comment: "",  // reset comment anyway
+    ...(newSourceId && { leadSource: new ObjectId(newSourceId) })
+  };
 
+  // ✅ reset response *only if user ticked deleteStory OR deleteComment*
+  if (deleteStory || deleteComment) {
+    updateFields.response = null;
+  }
 
   if (deleteStory) updateFields.story = "";
   if (deleteComment) updateFields.comment = "";
