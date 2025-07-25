@@ -1412,11 +1412,12 @@ exports.transferBulkLeads = async (req, res) => {
     selectedResponses,
     leadSource,
     profileId,
-    employeeId,         // User ka _id aata hai
+    employeeId,
     leadSourceId,
     leadResponse,
     deleteStory,
     deleteComment,
+    resetResponse,
     numberOfLeads,
   } = req.body;
 
@@ -1429,13 +1430,11 @@ exports.transferBulkLeads = async (req, res) => {
       return res.status(400).json({ error: "Missing profile or employee ID" });
     }
 
-    // ✅ find target employeeData to get _id for assignedTo
     const employeeData = await EmployeeData.findOne({ user: employeeId });
     if (!employeeData) {
       return res.status(404).json({ error: "Target employee data not found" });
     }
 
-    // ✅ build match conditions
     const matchConditions = {
       $and: [
         {
@@ -1457,20 +1456,18 @@ exports.transferBulkLeads = async (req, res) => {
       return res.status(404).json({ error: "No matching leads found" });
     }
 
-    // ✅ prepare dynamic update fields
+    // ✅ build updateFields
     const updateFields = {
       assignedTo: employeeData._id,
       leadStatus: "New",
     };
     if (leadSourceId) updateFields.leadSource = new mongoose.Types.ObjectId(leadSourceId);
     if (leadResponse) updateFields.response = leadResponse;
+    if (resetResponse) updateFields.response = "";   // <--- yeh line important hai
     if (deleteStory) updateFields.story = "";
     if (deleteComment) updateFields.comment = "";
 
-    // ✅ update Lead collection (actual data)
     await Lead.updateMany({ _id: { $in: leadIds } }, { $set: updateFields });
-
-    // (Optional) agar tum LeadUpload bhi maintain karte ho, toh waha bhi same update
     await LeadUpload.updateMany({ _id: { $in: leadIds } }, { $set: updateFields });
 
     res.status(200).json({
@@ -1482,6 +1479,7 @@ exports.transferBulkLeads = async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 };
+
 
 
 
