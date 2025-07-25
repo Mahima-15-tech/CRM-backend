@@ -1583,23 +1583,23 @@ exports.unallotLeads = async (req, res) => {
   const updateFields = {
     assignedTo: null,
     assignedDate: null,
-    comment: "",  // reset comment anyway
+    response: null,
+    comment: "",
     ...(newSourceId && { leadSource: new ObjectId(newSourceId) })
   };
-
-  // ✅ reset response *only if user ticked deleteStory OR deleteComment*
-  if (deleteStory || deleteComment) {
-    updateFields.response = null;
-  }
 
   if (deleteStory) updateFields.story = "";
   if (deleteComment) updateFields.comment = "";
 
   try {
+    // update pool leads
     await LeadUpload.updateMany(
       { _id: { $in: leadIds } },
       { $set: updateFields }
     );
+
+    // remove from assigned leads
+    await Lead.deleteMany({ _id: { $in: leadIds } });
 
     res.json({ success: true, message: "Leads unallotted to pool" });
   } catch (err) {
@@ -1607,6 +1607,7 @@ exports.unallotLeads = async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 };
+
 
 // controllers/leadController.js
 const { Parser } = require("json2csv");
