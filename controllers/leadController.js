@@ -345,7 +345,7 @@ exports.getUserLeadStats = async (req, res) => {
     const availableLimit = fetchRule ? fetchRule.availableLimit : 0;
 
     return res.json({ newLeadCount, availableLimit });
-  } catch (err) {
+  } catch (err) {getLeadsByUser
     console.error(err);
     res.status(500).json({ error: "Internal server error" });
   }
@@ -1407,13 +1407,12 @@ exports.deleteFieldsFromLeads = async (req, res) => {
 //   }
 // };
 
-
 exports.transferBulkLeads = async (req, res) => {
   const {
     selectedResponses,
     leadSource,
     profileId,
-    employeeId,
+    employeeId,         // User ka _id aata hai
     leadSourceId,
     leadResponse,
     deleteStory,
@@ -1426,7 +1425,17 @@ exports.transferBulkLeads = async (req, res) => {
       return res.status(400).json({ error: "selectedResponses must be a non-empty array" });
     }
 
-    // Build match conditions
+    if (!employeeId || !profileId) {
+      return res.status(400).json({ error: "Missing profile or employee ID" });
+    }
+
+    // ✅ find target employeeData to get _id for assignedTo
+    const employeeData = await EmployeeData.findOne({ user: employeeId });
+    if (!employeeData) {
+      return res.status(404).json({ error: "Target employee data not found" });
+    }
+
+    // ✅ build match conditions
     const matchConditions = {
       $and: [
         {
@@ -1441,39 +1450,39 @@ exports.transferBulkLeads = async (req, res) => {
       ],
     };
 
-    const leads = await LeadUpload.find(matchConditions).limit(Number(numberOfLeads) || 1000);
+    const leads = await Lead.find(matchConditions).limit(Number(numberOfLeads) || 1000);
     const leadIds = leads.map((lead) => lead._id);
 
     if (leadIds.length === 0) {
       return res.status(404).json({ error: "No matching leads found" });
     }
 
-    // Prepare dynamic update fields
-    const updateFields = {};
-    if (employeeId && profileId) {
-      updateFields.assignedTo = employeeId;
-      updateFields.leadStatus = "New";
-    }
+    // ✅ prepare dynamic update fields
+    const updateFields = {
+      assignedTo: employeeData._id,
+      leadStatus: "New",
+    };
     if (leadSourceId) updateFields.leadSource = new mongoose.Types.ObjectId(leadSourceId);
     if (leadResponse) updateFields.response = leadResponse;
     if (deleteStory) updateFields.story = "";
     if (deleteComment) updateFields.comment = "";
 
-    if (Object.keys(updateFields).length === 0) {
-      return res.status(400).json({ error: "Nothing to update" });
-    }
+    // ✅ update Lead collection (actual data)
+    await Lead.updateMany({ _id: { $in: leadIds } }, { $set: updateFields });
 
+    // (Optional) agar tum LeadUpload bhi maintain karte ho, toh waha bhi same update
     await LeadUpload.updateMany({ _id: { $in: leadIds } }, { $set: updateFields });
 
     res.status(200).json({
       success: true,
-      updated: `${leadIds.length} leads updated`,
+      updated: `${leadIds.length} leads transferred & updated`,
     });
   } catch (err) {
     console.error("❌ Error in transferBulkLeads:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 };
+
 
 
 
