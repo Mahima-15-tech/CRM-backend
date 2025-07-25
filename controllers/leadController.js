@@ -1338,6 +1338,76 @@ exports.deleteFieldsFromLeads = async (req, res) => {
 };
 
 
+// exports.transferBulkLeads = async (req, res) => {
+//   const {
+//     selectedResponses,
+//     leadSource,
+//     profileId,
+//     employeeId,
+//     leadSourceId,
+//     leadResponse,
+//     deleteStory,
+//     deleteComment,
+//     numberOfLeads,
+//   } = req.body;
+
+//   try {
+//     // ⛔ Validate required fields
+//     if (!Array.isArray(selectedResponses) || selectedResponses.length === 0) {
+//       return res.status(400).json({ error: "selectedResponses must be a non-empty array" });
+//     }
+
+//     if (!employeeId || !profileId) {
+//       return res.status(400).json({ error: "Missing profile or employee ID" });
+//     }
+
+//     // ✅ Build match conditions: filter by selectedResponses (response/status)
+//     const matchConditions = {
+//       $and: [
+//         {
+//           $or: selectedResponses.map((resp) => ({
+//             $or: [
+//               { response: { $regex: new RegExp(`^${resp}$`, "i") } },
+//               { status: { $regex: new RegExp(`^${resp}$`, "i") } },
+//             ],
+//           })),
+//         },
+//         ...(leadSource ? [{ leadSource }] : []),
+//       ],
+//     };
+
+//     const leads = await LeadUpload.find(matchConditions).limit(Number(numberOfLeads) || 1000);
+//     const leadIds = leads.map((lead) => lead._id);
+
+//     if (leadIds.length === 0) {
+//       return res.status(404).json({ error: "No matching leads found" });
+//     }
+
+//     // ✅ Prepare fields to update
+//     const updateFields = {
+//       assignedTo: employeeId,
+//       leadStatus: "New", // Mark transferred leads as new
+//     };
+
+//     if (leadSourceId) updateFields.leadSource = new mongoose.Types.ObjectId(leadSourceId);
+
+//     if (leadResponse) updateFields.response = leadResponse;
+//     if (deleteStory) updateFields.story = "";
+//     if (deleteComment) updateFields.comment = "";
+
+//     await LeadUpload.updateMany({ _id: { $in: leadIds } }, { $set: updateFields });
+
+//     res.status(200).json({
+//       success: true,
+//       updated: `${leadIds.length} leads transferred`,
+//     });
+//   } catch (err) {
+//     console.error("❌ Error in transferBulkLeads:", err);
+//     res.status(500).json({ error: "Internal server error" });
+//   }
+// };
+
+
 exports.transferBulkLeads = async (req, res) => {
   const {
     selectedResponses,
@@ -1352,23 +1422,18 @@ exports.transferBulkLeads = async (req, res) => {
   } = req.body;
 
   try {
-    // ⛔ Validate required fields
     if (!Array.isArray(selectedResponses) || selectedResponses.length === 0) {
       return res.status(400).json({ error: "selectedResponses must be a non-empty array" });
     }
 
-    if (!employeeId || !profileId) {
-      return res.status(400).json({ error: "Missing profile or employee ID" });
-    }
-
-    // ✅ Build match conditions: filter by selectedResponses (response/status)
+    // Build match conditions
     const matchConditions = {
       $and: [
         {
           $or: selectedResponses.map((resp) => ({
             $or: [
-              { response: { $regex: new RegExp(`^${resp}$`, "i") } },
-              { status: { $regex: new RegExp(`^${resp}$`, "i") } },
+              { response: new RegExp(`^${resp}$`, "i") },
+              { status: new RegExp(`^${resp}$`, "i") },
             ],
           })),
         },
@@ -1383,23 +1448,26 @@ exports.transferBulkLeads = async (req, res) => {
       return res.status(404).json({ error: "No matching leads found" });
     }
 
-    // ✅ Prepare fields to update
-    const updateFields = {
-      assignedTo: employeeId,
-      leadStatus: "New", // Mark transferred leads as new
-    };
-
+    // Prepare dynamic update fields
+    const updateFields = {};
+    if (employeeId && profileId) {
+      updateFields.assignedTo = employeeId;
+      updateFields.leadStatus = "New";
+    }
     if (leadSourceId) updateFields.leadSource = new mongoose.Types.ObjectId(leadSourceId);
-
     if (leadResponse) updateFields.response = leadResponse;
     if (deleteStory) updateFields.story = "";
     if (deleteComment) updateFields.comment = "";
+
+    if (Object.keys(updateFields).length === 0) {
+      return res.status(400).json({ error: "Nothing to update" });
+    }
 
     await LeadUpload.updateMany({ _id: { $in: leadIds } }, { $set: updateFields });
 
     res.status(200).json({
       success: true,
-      updated: `${leadIds.length} leads transferred`,
+      updated: `${leadIds.length} leads updated`,
     });
   } catch (err) {
     console.error("❌ Error in transferBulkLeads:", err);
@@ -1869,7 +1937,7 @@ exports.getEmployeeLeadSummary = async (req, res) => {
 
     leads.forEach((lead) => {
       // Count responses
-      const response = lead.response || "Unknown";
+      const response = lead.response || "Fresh Leads";
       responseCounts[response] = (responseCounts[response] || 0) + 1;
 
       // Count status
