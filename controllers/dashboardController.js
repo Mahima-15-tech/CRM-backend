@@ -6,97 +6,97 @@ const FTAssignment = require("../models/FTAssignment");
 const Team = require("../models/Team");
 
 // ------------------- ADMIN DASHBOARD -------------------
-exports.getAdminDashboard = async (req, res) => {
-  try {
-    console.log("🚀 Starting getAdminDashboard...");
+// exports.getAdminDashboard = async (req, res) => {
+//   try {
+//     console.log("🚀 Starting getAdminDashboard...");
 
-    const employees = await EmployeeData.find({});
-    const employeeIds = employees.map(emp => emp._id);
-    console.log("🧑 employeeIds:", employeeIds);
+//     const employees = await EmployeeData.find({});
+//     const employeeIds = employees.map(emp => emp._id);
+//     console.log("🧑 employeeIds:", employeeIds);
 
-    const totalTarget = employees.reduce((sum, emp) => sum + (emp.target || 0), 0);
-    console.log("🎯 totalTarget:", totalTarget);
+//     const totalTarget = employees.reduce((sum, emp) => sum + (emp.target || 0), 0);
+//     console.log("🎯 totalTarget:", totalTarget);
 
-    const achievedAgg = await Payment.aggregate([
-      { $match: { status: "Approved" } },
-      { $group: { _id: null, total: { $sum: "$totalPaid" } } }
-    ]);
-    const achievedTarget = achievedAgg[0]?.total || 0;
-    console.log("🏆 achievedTarget:", achievedTarget);
+//     const achievedAgg = await Payment.aggregate([
+//       { $match: { status: "Approved" } },
+//       { $group: { _id: null, total: { $sum: "$totalPaid" } } }
+//     ]);
+//     const achievedTarget = achievedAgg[0]?.total || 0;
+//     console.log("🏆 achievedTarget:", achievedTarget);
 
-    // ✅ IST date calculation
-    const now = new Date();
-    const istNow = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
-    const istDateStr = istNow.toISOString().split('T')[0];
-    const startOfDayIST = new Date(`${istDateStr}T00:00:00+05:30`);
-    const endOfDayIST = new Date(`${istDateStr}T23:59:59+05:30`);
-    console.log({
-      "🕒 now": now.toISOString(),
-      "🇮🇳 istNow": istNow.toISOString(),
-      "⏰ startOfDayIST": startOfDayIST.toISOString(),
-      "⏰ endOfDayIST": endOfDayIST.toISOString()
-    });
+//     // ✅ IST date calculation
+//     const now = new Date();
+//     const istNow = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
+//     const istDateStr = istNow.toISOString().split('T')[0];
+//     const startOfDayIST = new Date(`${istDateStr}T00:00:00+05:30`);
+//     const endOfDayIST = new Date(`${istDateStr}T23:59:59+05:30`);
+//     console.log({
+//       "🕒 now": now.toISOString(),
+//       "🇮🇳 istNow": istNow.toISOString(),
+//       "⏰ startOfDayIST": startOfDayIST.toISOString(),
+//       "⏰ endOfDayIST": endOfDayIST.toISOString()
+//     });
 
-    // ✅ Today's payment
-    const todaysPaymentAgg = await Payment.aggregate([
-      { $match: { status: "Approved", createdAt: { $gte: startOfDayIST, $lte: endOfDayIST } } },
-      { $group: { _id: null, total: { $sum: "$totalPaid" } } }
-    ]);
-    const todaysPayment = todaysPaymentAgg[0]?.total || 0;
-    console.log("💰 todaysPayment:", todaysPayment);
-    console.log("💰 todaysPaymentAgg:", todaysPaymentAgg);
+//     // ✅ Today's payment
+//     const todaysPaymentAgg = await Payment.aggregate([
+//       { $match: { status: "Approved", createdAt: { $gte: startOfDayIST, $lte: endOfDayIST } } },
+//       { $group: { _id: null, total: { $sum: "$totalPaid" } } }
+//     ]);
+//     const todaysPayment = todaysPaymentAgg[0]?.total || 0;
+//     console.log("💰 todaysPayment:", todaysPayment);
+//     console.log("💰 todaysPaymentAgg:", todaysPaymentAgg);
 
-    // ✅ Today's followups
-    const followUps = await TodaysFollowUp.find({
-      employee: { $in: employeeIds },
-      date: { $gte: startOfDayIST, $lte: endOfDayIST }
-    });
-    const todayFollowUps = followUps.length;
-    console.log("📊 todayFollowUps count:", todayFollowUps);
-    console.log("📊 followUps:", followUps);
+//     // ✅ Today's followups
+//     const followUps = await TodaysFollowUp.find({
+//       employee: { $in: employeeIds },
+//       date: { $gte: startOfDayIST, $lte: endOfDayIST }
+//     });
+//     const todayFollowUps = followUps.length;
+//     console.log("📊 todayFollowUps count:", todayFollowUps);
+//     console.log("📊 followUps:", followUps);
 
-    // ✅ Leads modified (with debug)
-    const modifiedLeads = await Lead.find({
-      employee: { $in: employeeIds },
-      isDeleted: false,
-      updatedAt: { $gte: startOfDayIST, $lte: endOfDayIST }
-    }).select("name updatedAt employee");
-    const leadsModified = modifiedLeads.length;
-    console.log("✏️ leadsModified count:", leadsModified);
-    console.log("✏️ modifiedLeads:", modifiedLeads);
+//     // ✅ Leads modified (with debug)
+//     const modifiedLeads = await Lead.find({
+//       employee: { $in: employeeIds },
+//       isDeleted: false,
+//       updatedAt: { $gte: startOfDayIST, $lte: endOfDayIST }
+//     }).select("name updatedAt employee");
+//     const leadsModified = modifiedLeads.length;
+//     console.log("✏️ leadsModified count:", leadsModified);
+//     console.log("✏️ modifiedLeads:", modifiedLeads);
 
-    // ✅ Pool leads
-    const poolLeads = await Lead.aggregate([
-      {
-        $match: {
-          employee: null,
-          leadStatus: { $ne: "Deleted" },
-          isDeleted: false
-        }
-      },
-      { $group: { _id: "$leadType", count: { $sum: 1 } } }
-    ]);
-    console.log("📦 poolLeads:", poolLeads);
+//     // ✅ Pool leads
+//     const poolLeads = await Lead.aggregate([
+//       {
+//         $match: {
+//           employee: null,
+//           leadStatus: { $ne: "Deleted" },
+//           isDeleted: false
+//         }
+//       },
+//       { $group: { _id: "$leadType", count: { $sum: 1 } } }
+//     ]);
+//     console.log("📦 poolLeads:", poolLeads);
 
-    const leadBalance = {};
-    poolLeads.forEach(item => { leadBalance[item._id] = item.count; });
-    console.log("📦 leadBalance:", leadBalance);
+//     const leadBalance = {};
+//     poolLeads.forEach(item => { leadBalance[item._id] = item.count; });
+//     console.log("📦 leadBalance:", leadBalance);
 
-    // ✅ Final response
-    console.log("✅ Sending response to frontend...");
-    res.json({
-      totalTarget,
-      achievedTarget,
-      todaysPayment,
-      todayFollowUps,
-      leadsModified,
-      leadBalance
-    });
-  } catch (err) {
-    console.error("🔥 Admin Dashboard Error:", err);
-    res.status(500).json({ message: "Something went wrong" });
-  }
-};
+//     // ✅ Final response
+//     console.log("✅ Sending response to frontend...");
+//     res.json({
+//       totalTarget,
+//       achievedTarget,
+//       todaysPayment,
+//       todayFollowUps,
+//       leadsModified,
+//       leadBalance
+//     });
+//   } catch (err) {
+//     console.error("🔥 Admin Dashboard Error:", err);
+//     res.status(500).json({ message: "Something went wrong" });
+//   }
+// };
 
 
 // exports.getAdminDashboard = async (req, res) => {
@@ -168,6 +168,83 @@ exports.getAdminDashboard = async (req, res) => {
 //     res.status(500).json({ message: "Something went wrong" });
 //   }
 // };
+
+
+
+// ------------------- ADMIN DASHBOARD -------------------
+exports.getAdminDashboard = async (req, res) => {
+  try {
+    console.log("🚀 Starting getAdminDashboard...");
+
+    const employees = await EmployeeData.find({});
+    const employeeIds = employees.map(emp => emp._id);
+
+    const totalTarget = employees.reduce((sum, emp) => sum + (emp.target || 0), 0);
+
+    const achievedAgg = await Payment.aggregate([
+      { $match: { status: "Approved" } },
+      { $group: { _id: null, total: { $sum: "$totalPaid" } } }
+    ]);
+    const achievedTarget = achievedAgg[0]?.total || 0;
+
+    // ✅ IST date calculation
+    const now = new Date();
+    const istNow = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
+    const istDateStr = istNow.toISOString().split('T')[0];
+    const startOfDayIST = new Date(`${istDateStr}T00:00:00+05:30`);
+    const endOfDayIST = new Date(`${istDateStr}T23:59:59+05:30`);
+
+    // ✅ Today's payment
+    const todaysPaymentAgg = await Payment.aggregate([
+      { $match: { status: "Approved", createdAt: { $gte: startOfDayIST, $lte: endOfDayIST } } },
+      { $group: { _id: null, total: { $sum: "$totalPaid" } } }
+    ]);
+    const todaysPayment = todaysPaymentAgg[0]?.total || 0;
+
+    // ✅ Today's followups
+    const followUps = await TodaysFollowUp.find({
+      employee: { $in: employeeIds },
+      date: { $gte: startOfDayIST, $lte: endOfDayIST }
+    });
+    const todayFollowUps = followUps.length;
+
+    // ✅ Leads modified today: only where responseModifiedAt is today
+    const modifiedLeads = await Lead.find({
+      employee: { $in: employeeIds },
+      isDeleted: false,
+      responseModifiedAt: { $gte: startOfDayIST, $lte: endOfDayIST }
+    });
+    const leadsModified = modifiedLeads.length;
+
+    // ✅ Pool leads
+    const poolLeads = await Lead.aggregate([
+      {
+        $match: {
+          employee: null,
+          leadStatus: { $ne: "Deleted" },
+          isDeleted: false
+        }
+      },
+      { $group: { _id: "$leadType", count: { $sum: 1 } } }
+    ]);
+    const leadBalance = {};
+    poolLeads.forEach(item => { leadBalance[item._id] = item.count; });
+
+    // ✅ Send to frontend
+    res.json({
+      totalTarget,
+      achievedTarget,
+      todaysPayment,
+      todayFollowUps,
+      leadsModified,
+      leadBalance
+    });
+
+  } catch (err) {
+    console.error("🔥 Admin Dashboard Error:", err);
+    res.status(500).json({ message: "Something went wrong" });
+  }
+};
 
 
 

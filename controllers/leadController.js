@@ -628,6 +628,45 @@ exports.getAvailableSourceCounts = async (req, res) => {
 
 
 // Update lead response & mark as old
+// exports.updateLeadResponse = async (req, res) => {
+//   try {
+//     const { response, comment, employee } = req.body;
+//     const leadId = req.params.leadId;
+
+//     // ✅ Step: confirm employee really is EmployeeData ID, not user ID
+//     let empData = await EmployeeData.findById(employee);
+//     if (!empData) {
+//       // maybe employee is user ID, try to find employeeData by user
+//       empData = await EmployeeData.findOne({ user: employee });
+//     }
+
+//     if (!empData) {
+//       return res.status(400).json({ message: "Invalid employee ID" });
+//     }
+
+//     const updated = await Lead.findByIdAndUpdate(
+//       leadId,
+//       {
+//         response,
+//         comment,
+//         leadStatus: "Old",
+//         isOld: true,
+//         employee: empData._id   // ✅ Always use EmployeeData ID
+//       },
+//       { new: true }
+//     );
+
+//     if (!updated) {
+//       return res.status(404).json({ message: "Lead not found" });
+//     }
+
+//     res.json({ message: "Lead updated successfully", lead: updated });
+//   } catch (err) {
+//     console.error("Error in updateLeadResponse:", err);
+//     res.status(500).json({ message: "Server error" });
+//   }
+// };
+
 exports.updateLeadResponse = async (req, res) => {
   try {
     const { response, comment, employee } = req.body;
@@ -651,7 +690,10 @@ exports.updateLeadResponse = async (req, res) => {
         comment,
         leadStatus: "Old",
         isOld: true,
-        employee: empData._id   // ✅ Always use EmployeeData ID
+        employee: empData._id,    // ✅ Always use EmployeeData ID
+
+        // ✅ add this new field to track modification date
+        responseModifiedAt: new Date()
       },
       { new: true }
     );
@@ -1219,14 +1261,12 @@ exports.updateLead = async (req, res) => {
 };
 
 
+// getSummaryReport – fixed
 exports.getSummaryReport = async (req, res) => {
   try {
     const { source } = req.query;
     const match = {};
-
-    if (source) {
-      match.leadSource = source;
-    }
+    if (source) match.leadSource = source;
 
     const allLeads = await Lead.find(match).populate("leadSource");
 
@@ -1244,42 +1284,26 @@ exports.getSummaryReport = async (req, res) => {
     let total = 0;
 
     for (const lead of allLeads) {
-      const res = (lead.response || "").toLowerCase().trim();
+      let counted = false;
+
+      const res = (lead.response || "").trim();  // keep original case
 
       if (!res) {
         statusCounts["Fresh Leads"]++;
-        total++;
+        counted = true;
       } else {
-        const label = res
-          .split(" ")
-          .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-          .join(" ");
-        responseCounts[label] = (responseCounts[label] || 0) + 1;
-        total++;
+        responseCounts[res] = (responseCounts[res] || 0) + 1;
+        counted = true;
       }
 
-      if (lead.response === "FT" || lead.leadStatus === "FT") {
-        statusCounts.FT++;
-        total++;
-      }
+      if (lead.response === "FT" || lead.leadStatus === "FT") statusCounts.FT++;
+      if (lead.leadStatus === "Disposed") statusCounts.Disposed++;
+      if (lead.leadStatus === "Deleted") statusCounts.Deleted++;
+      if (!lead.assignedTo) statusCounts.Unalloted++;
 
-      if (lead.leadStatus === "Disposed") {
-        statusCounts.Disposed++;
-        total++;
-      }
-
-      if (lead.leadStatus === "Deleted") {
-        statusCounts.Deleted++;
-        total++;
-      }
-
-      if (!lead.assignedTo) {
-        statusCounts.Unalloted++;
-        total++;
-      }
+      if (counted) total++;
     }
 
-    // ✅ Now fetch number of clients
     const approvedClients = await Payment.find({ status: "Approved" })
       .populate("leadId")
       .then(async (payments) => {
@@ -1287,12 +1311,7 @@ exports.getSummaryReport = async (req, res) => {
         for (let payment of payments) {
           const invoice = await Invoice.findOne({ paymentId: payment._id, status: "Running" });
           const kyc = await KYC.findOne({ leadId: payment.leadId?._id, status: "Approved" });
-
-          if (
-            invoice &&
-            kyc &&
-            (!source || (payment.leadId?.leadSource?.toString() === source))
-          ) {
+          if (invoice && kyc && (!source || (payment.leadId?.leadSource?.toString() === source))) {
             count++;
           }
         }
@@ -1300,7 +1319,7 @@ exports.getSummaryReport = async (req, res) => {
       });
 
     statusCounts.Client = approvedClients;
-    total += approvedClients;
+    // don't add to total again; frontend adds clientCount separately
 
     res.json({ responseCounts, statusCounts, totalLeads: total });
   } catch (err) {
@@ -1308,6 +1327,7 @@ exports.getSummaryReport = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
 
 // controllers/leadController.js
@@ -1407,6 +1427,79 @@ exports.deleteFieldsFromLeads = async (req, res) => {
 //   }
 // };
 
+// exports.transferBulkLeads = async (req, res) => {
+//   const {
+//     selectedResponses,
+//     leadSource,
+//     profileId,
+//     employeeId,
+//     leadSourceId,
+//     leadResponse,
+//     deleteStory,
+//     deleteComment,
+//     resetResponse,
+//     numberOfLeads,
+//   } = req.body;
+
+//   try {
+//     if (!Array.isArray(selectedResponses) || selectedResponses.length === 0) {
+//       return res.status(400).json({ error: "selectedResponses must be a non-empty array" });
+//     }
+
+//     if (!employeeId || !profileId) {
+//       return res.status(400).json({ error: "Missing profile or employee ID" });
+//     }
+
+//     const employeeData = await EmployeeData.findOne({ user: employeeId });
+//     if (!employeeData) {
+//       return res.status(404).json({ error: "Target employee data not found" });
+//     }
+
+//     const matchConditions = {
+//       $and: [
+//         {
+//           $or: selectedResponses.map((resp) => ({
+//             $or: [
+//               { response: new RegExp(`^${resp}$`, "i") },
+//               { status: new RegExp(`^${resp}$`, "i") },
+//             ],
+//           })),
+//         },
+//         ...(leadSource ? [{ leadSource }] : []),
+//       ],
+//     };
+
+//     const leads = await Lead.find(matchConditions).limit(Number(numberOfLeads) || 1000);
+//     const leadIds = leads.map((lead) => lead._id);
+
+//     if (leadIds.length === 0) {
+//       return res.status(404).json({ error: "No matching leads found" });
+//     }
+
+//     // ✅ build updateFields
+//     const updateFields = {
+//       assignedTo: employeeData._id,
+//       leadStatus: "New",
+//     };
+//     if (leadSourceId) updateFields.leadSource = new mongoose.Types.ObjectId(leadSourceId);
+//     if (leadResponse) updateFields.response = leadResponse;
+//     if (resetResponse) updateFields.response = "";   // <--- yeh line important hai
+//     if (deleteStory) updateFields.story = "";
+//     if (deleteComment) updateFields.comment = "";
+
+//     await Lead.updateMany({ _id: { $in: leadIds } }, { $set: updateFields });
+//     await LeadUpload.updateMany({ _id: { $in: leadIds } }, { $set: updateFields });
+
+//     res.status(200).json({
+//       success: true,
+//       updated: `${leadIds.length} leads transferred & updated`,
+//     });
+//   } catch (err) {
+//     console.error("❌ Error in transferBulkLeads:", err);
+//     res.status(500).json({ error: "Internal server error" });
+//   }
+// };
+
 exports.transferBulkLeads = async (req, res) => {
   const {
     selectedResponses,
@@ -1425,7 +1518,6 @@ exports.transferBulkLeads = async (req, res) => {
     if (!Array.isArray(selectedResponses) || selectedResponses.length === 0) {
       return res.status(400).json({ error: "selectedResponses must be a non-empty array" });
     }
-
     if (!employeeId || !profileId) {
       return res.status(400).json({ error: "Missing profile or employee ID" });
     }
@@ -1441,7 +1533,7 @@ exports.transferBulkLeads = async (req, res) => {
           $or: selectedResponses.map((resp) => ({
             $or: [
               { response: new RegExp(`^${resp}$`, "i") },
-              { status: new RegExp(`^${resp}$`, "i") },
+              { leadStatus: new RegExp(`^${resp}$`, "i") }, // ✅ fixed
             ],
           })),
         },
@@ -1456,14 +1548,13 @@ exports.transferBulkLeads = async (req, res) => {
       return res.status(404).json({ error: "No matching leads found" });
     }
 
-    // ✅ build updateFields
     const updateFields = {
       assignedTo: employeeData._id,
       leadStatus: "New",
     };
     if (leadSourceId) updateFields.leadSource = new mongoose.Types.ObjectId(leadSourceId);
     if (leadResponse) updateFields.response = leadResponse;
-    if (resetResponse) updateFields.response = "";   // <--- yeh line important hai
+    if (resetResponse) updateFields.response = "";
     if (deleteStory) updateFields.story = "";
     if (deleteComment) updateFields.comment = "";
 
@@ -1479,6 +1570,7 @@ exports.transferBulkLeads = async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 };
+
 
 
 

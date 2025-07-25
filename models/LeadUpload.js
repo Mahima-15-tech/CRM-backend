@@ -58,6 +58,9 @@ const leadSchema = new mongoose.Schema({
   isOld: { type: Boolean, default: false },
   isDeleted: { type: Boolean, default: false },
 
+  responseModifiedAt: { type: Date },
+
+
   leadStatus: {
     type: String,
     enum: ["New", "Old", "Disposed", "Deleted", "DND"],
@@ -74,6 +77,8 @@ const leadSchema = new mongoose.Schema({
   assignedDate: {
   type: Date,
 },
+
+
 
 }, { timestamps: true });
 
