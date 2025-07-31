@@ -139,33 +139,22 @@ exports.generateInvoicePDF = async (req, res) => {
     const invoice = await Invoice.findById(req.params.id).lean();
     if (!invoice) return res.status(404).send('Invoice not found');
 
-    // Render HTML from EJS
-   
+    // Use cloud image URL instead of local file
+    const logoUrl = 'https://res.cloudinary.com/dxw8erwq9/image/upload/v1753950744/logo_pnytco.jpg';
 
-const fs = require('fs');
-
-const imagePath = path.join(__dirname, '../utils/images/logo.jpg').replace(/\\/g, '/');
-const imageData = fs.readFileSync(imagePath, 'base64');
-const logoBase64 = `data:image/png;base64,${imageData}`;
-
-const html = await ejs.renderFile(
-  path.join(__dirname, '../utils/invoice-template.ejs'),
-  { invoice, logoBase64 }
-);
-
-
-
-
-
+    const html = await ejs.renderFile(
+      path.join(__dirname, '../utils/invoice-template.ejs'),
+      { invoice, logoUrl }
+    );
 
     const browser = await puppeteer.launch({
       headless: 'new',
       args: [
-    '--no-sandbox',
-    '--disable-setuid-sandbox',
-    '--allow-file-access-from-files',
-    '--disable-web-security'
-  ],
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--allow-file-access-from-files',
+        '--disable-web-security'
+      ],
     });
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: 'networkidle0' });
