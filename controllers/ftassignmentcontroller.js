@@ -24,6 +24,9 @@ exports.assignFT = async (req, res) => {
 
 
     await FTAssignment.insertMany(assignments);
+    global.io.emit('newFTAssigned', assignments);
+
+    
     res.status(201).json({ message: 'FT assigned successfully' });
   } catch (err) {
     console.error('FT Save Error:', err);
