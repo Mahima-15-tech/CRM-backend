@@ -38,15 +38,16 @@ exports.addInvoice = async (req, res) => {
 
     const saved = await newInvoice.save();
 
-    // ✅ emit event to all clients
+    // ✅ Emit event to all connected clients
+    console.log('✅ Emitting newInvoice event to all clients:', saved._id);
     global.io.emit('newInvoice', saved);
 
     res.status(201).json(saved);
   } catch (err) {
+    console.error('❌ Error in addInvoice:', err);
     res.status(500).json({ error: "Failed to create invoice", details: err.message });
   }
 };
-
 
 exports.getPendingInvoices = async (req, res) => {
   try {
