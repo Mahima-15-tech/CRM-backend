@@ -4,6 +4,8 @@ require('dotenv').config();
 const path = require('path');
 const ejs = require('ejs');
 const axios = require("axios");
+const numberToWords = require('number-to-words');
+
 
 // const puppeteer = require('puppeteer');
 
@@ -183,6 +185,8 @@ exports.getAllInvoices = async (req, res) => {
 exports.generateInvoicePDF = async (req, res) => {
   try {
     const invoice = await Invoice.findById(req.params.id).lean();
+    invoice.amountInWords = numberToWords.toWords(invoice.paid) + " only";
+
     if (!invoice) return res.status(404).send('Invoice not found');
 
     const logoUrl = 'https://res.cloudinary.com/dxw8erwq9/image/upload/v1753950744/logo_pnytco.jpg';

@@ -26,6 +26,7 @@
     "mongoose": "^8.15.1",
     "multer": "^2.0.2",
     "multer-storage-cloudinary": "^4.0.0",
+    "number-to-words": "^1.2.4",
     "pdfkit": "^0.17.1",
     "playwright": "^1.54.1",
     "puppeteer": "^24.12.1",
