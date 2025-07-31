@@ -6,6 +6,7 @@ const puppeteer = require('puppeteer');
 const Invoice = require("../models/Invoice");
 
 const PDFDocument = require('pdfkit');
+const fs = require('fs');
 // const KYC = require("../models/KYC");
 
 
@@ -134,44 +135,83 @@ exports.getAllInvoices = async (req, res) => {
 
 
 
+// exports.generateInvoicePDF = async (req, res) => {
+//   try {
+//     const invoice = await Invoice.findById(req.params.id).lean();
+//     if (!invoice) return res.status(404).send('Invoice not found');
+
+//     // Use cloud image URL instead of local file
+//     const logoUrl = 'https://res.cloudinary.com/dxw8erwq9/image/upload/v1753950744/logo_pnytco.jpg';
+
+//     const html = await ejs.renderFile(
+//       path.join(__dirname, '../utils/invoice-template.ejs'),
+//       { invoice, logoUrl }
+//     );
+
+//   const browser = await puppeteer.launch({
+//   headless: true,
+//   args: ['--no-sandbox', '--disable-setuid-sandbox'],
+// });
+
+//     const page = await browser.newPage();
+//     await page.setContent(html, { waitUntil: 'networkidle0' });
+
+//     const pdfBuffer = await page.pdf({
+//       format: 'A4',
+//       printBackground: true
+//     });
+
+//     await browser.close();
+
+//     res.setHeader('Content-Type', 'application/pdf');
+//     res.setHeader('Content-Disposition', `attachment; filename=${invoice.invoiceNumber}.pdf`);
+//     res.send(pdfBuffer);
+
+//   } catch (err) {
+//     console.error('PDF generation error:', err);
+//     res.status(500).send('Failed to generate PDF');
+//   }
+// };
+
+
+
 exports.generateInvoicePDF = async (req, res) => {
   try {
     const invoice = await Invoice.findById(req.params.id).lean();
     if (!invoice) return res.status(404).send('Invoice not found');
 
-    // Use cloud image URL instead of local file
-    const logoUrl = 'https://res.cloudinary.com/dxw8erwq9/image/upload/v1753950744/logo_pnytco.jpg';
+    // ✅ Start PDF
+    const doc = new PDFDocument();
 
-    const html = await ejs.renderFile(
-      path.join(__dirname, '../utils/invoice-template.ejs'),
-      { invoice, logoUrl }
-    );
-
-  const browser = await puppeteer.launch({
-  headless: true,
-  args: ['--no-sandbox', '--disable-setuid-sandbox'],
-});
-
-    const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: 'networkidle0' });
-
-    const pdfBuffer = await page.pdf({
-      format: 'A4',
-      printBackground: true
-    });
-
-    await browser.close();
-
+    // Stream response
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename=${invoice.invoiceNumber}.pdf`);
-    res.send(pdfBuffer);
+    doc.pipe(res);
+
+    // ✅ Add content
+    doc.fontSize(20).text('Invoice', { align: 'center' });
+    doc.moveDown();
+    doc.fontSize(12).text(`Invoice No: ${invoice.invoiceNumber}`);
+    doc.text(`Invoice Date: ${new Date(invoice.invoiceDate).toLocaleDateString()}`);
+    doc.text(`Client: ${invoice.clientName}`);
+    doc.text(`Product: ${invoice.product}`);
+    doc.text(`Pack: ${invoice.pack}`);
+    doc.text(`Start: ${new Date(invoice.startDate).toLocaleDateString()}`);
+    doc.text(`End: ${new Date(invoice.endDate).toLocaleDateString()}`);
+    doc.text(`Paid: ₹${invoice.paid}`);
+
+    // ✅ Footer
+    doc.moveDown();
+    doc.text('Thank you for your business!');
+
+    // ✅ Finalize
+    doc.end();
 
   } catch (err) {
     console.error('PDF generation error:', err);
     res.status(500).send('Failed to generate PDF');
   }
 };
-
 
 
 // Add this to invoiceController.js
