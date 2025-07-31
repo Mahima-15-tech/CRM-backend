@@ -13,26 +13,32 @@ exports.assignFT = async (req, res) => {
     const assignments = selectedFt.map(pid => ({
       leadId,
       productId: pid,
-       leadSourceId: req.body.leadSourceId, 
+      leadSourceId: req.body.leadSourceId,
       fromDate,
       toDate,
       status: 'Pending',
-      raisedBy: userId, // ✅ store who added FT
+      raisedBy: userId,
     }));
 
-    console.log("leadSourceId in body:", req.body.leadSourceId);
+    // Pehle save karo
+    const savedAssignments = await FTAssignment.insertMany(assignments);
 
+    // Ab inhe populate karke naya data banao
+    const populated = await FTAssignment.find({ _id: { $in: savedAssignments.map(a => a._id) } })
+      .populate('leadId', 'name mobile')
+      .populate('productId', 'productName')
+      .populate('raisedBy', 'name username');
 
-    await FTAssignment.insertMany(assignments);
-    global.io.emit('newFTAssigned', assignments);
+    // Ab frontend ko emit karo populated data
+    global.io.emit('newFTAssigned', populated);
 
-    
     res.status(201).json({ message: 'FT assigned successfully' });
   } catch (err) {
     console.error('FT Save Error:', err);
     res.status(500).json({ error: 'Failed to assign FT' });
   }
 };
+
 
 
 // GET - All pending Free Trials for admin approval
