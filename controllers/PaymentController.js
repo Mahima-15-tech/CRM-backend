@@ -74,6 +74,7 @@ await invoice.save();
 
 global.io.emit('newInvoice', invoice);
 
+global.io.emit('pendingCountsUpdated');
 
     // Create Pending KYC
     const existingKYC = await KYC.findOne({ leadId });
@@ -86,6 +87,9 @@ global.io.emit('newInvoice', invoice);
         status: "Pending",
       });
     }
+
+ 
+
 
     res.status(201).json({ success: true, data: savedPayment });
   } catch (err) {

@@ -42,6 +42,8 @@ exports.addInvoice = async (req, res) => {
     console.log('✅ Emitting newInvoice event to all clients:', saved._id);
     global.io.emit('newInvoice', saved);
 
+    global.io.emit('pendingCountsUpdated');
+
     res.status(201).json(saved);
   } catch (err) {
     console.error('❌ Error in addInvoice:', err);

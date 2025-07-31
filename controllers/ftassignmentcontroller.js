@@ -32,6 +32,8 @@ exports.assignFT = async (req, res) => {
     // Ab frontend ko emit karo populated data
     global.io.emit('newFTAssigned', populated);
 
+
+    global.io.emit('pendingCountsUpdated');
     res.status(201).json({ message: 'FT assigned successfully' });
   } catch (err) {
     console.error('FT Save Error:', err);
