@@ -72,6 +72,8 @@ const invoice = new Invoice({
 
 await invoice.save();
 
+global.io.emit('newInvoice', invoice);
+
 
     // Create Pending KYC
     const existingKYC = await KYC.findOne({ leadId });
