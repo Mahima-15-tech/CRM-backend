@@ -4,9 +4,9 @@ const ejs = require('ejs');
 // const puppeteer = require('puppeteer');
 
 const Invoice = require("../models/Invoice");
-const { chromium } = require('playwright'); // puppeteer ki jagah
+// const { chromium } = require('playwright'); // puppeteer ki jagah
 
-const PDFDocument = require('pdfkit');
+// const PDFDocument = require('pdfkit');
 const fs = require('fs');
 // const KYC = require("../models/KYC");
 
@@ -181,32 +181,29 @@ exports.generateInvoicePDF = async (req, res) => {
     const invoice = await Invoice.findById(req.params.id).lean();
     if (!invoice) return res.status(404).send('Invoice not found');
 
-    // Cloudinary ya external hosted logo ka URL
     const logoUrl = 'https://res.cloudinary.com/dxw8erwq9/image/upload/v1753950744/logo_pnytco.jpg';
 
+    // Step 1: Render HTML as string
     const html = await ejs.renderFile(
       path.join(__dirname, '../utils/invoice-template.ejs'),
       { invoice, logoUrl }
     );
 
-    // ✅ Playwright launch
-    const browser = await chromium.launch({
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    // Step 2: Send HTML to html2pdf.app to get PDF
+    const pdfResponse = await axios.post('https://api.html2pdf.app/v1/generate', {
+      html,
+    }, {
+      responseType: 'arraybuffer', // important to get raw PDF bytes
+      headers: {
+        'Content-Type': 'application/json'
+      }
     });
 
-    const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: 'domcontentloaded' });
-
-    const pdfBuffer = await page.pdf({
-      format: 'A4',
-      printBackground: true,
-    });
-
-    await browser.close();
-
+    // Step 3: Send back PDF
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename=${invoice.invoiceNumber}.pdf`);
-    res.send(pdfBuffer);
+    res.send(pdfResponse.data);
+
   } catch (err) {
     console.error('PDF generation error:', err);
     res.status(500).send('Failed to generate PDF');
