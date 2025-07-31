@@ -1,4 +1,5 @@
 // controllers/invoiceController.js
+require('dotenv').config();
 
 const path = require('path');
 const ejs = require('ejs');
@@ -194,6 +195,7 @@ exports.generateInvoicePDF = async (req, res) => {
 
     // Step 2: Send HTML to html2pdf.app to get PDF
     const pdfResponse = await axios.post('https://api.html2pdf.app/v1/generate', {
+      
       html,
       apiKey: process.env.HTML2PDF_API_KEY
     }, {
@@ -202,6 +204,9 @@ exports.generateInvoicePDF = async (req, res) => {
         'Content-Type': 'application/json'
       }
     });
+
+    console.log('API key:', process.env.HTML2PDF_API_KEY)
+
 
     // Step 3: Send back PDF
     res.setHeader('Content-Type', 'application/pdf');
