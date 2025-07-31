@@ -22,28 +22,31 @@ let invoiceCounter = 1;
 
 exports.addInvoice = async (req, res) => {
   try {
-  const {
-  clientName, mobile, product, pack, price, discount, paid,
-  gst, transactionCharge, startDate, endDate, duration, createdBy,
-  leadSource, leadResponse , leadId, paymentId // ✅ added
-} = req.body;
-
+    const {
+      clientName, mobile, product, pack, price, discount, paid,
+      gst, transactionCharge, startDate, endDate, duration, createdBy,
+      leadSource, leadResponse, leadId, paymentId
+    } = req.body;
 
     const newInvoice = new Invoice({
       invoiceNumber: `INV-${invoiceCounter++}`,
       invoiceDate: new Date(),
       clientName, mobile, product, pack, price, discount, paid,
       gst, transactionCharge, startDate, endDate, duration,
-      createdBy,leadSource,     // ✅ added
-  leadResponse   ,leadId, paymentId 
+      createdBy, leadSource, leadResponse, leadId, paymentId
     });
 
     const saved = await newInvoice.save();
+
+    // ✅ emit event to all clients
+    global.io.emit('newInvoice', saved);
+
     res.status(201).json(saved);
   } catch (err) {
     res.status(500).json({ error: "Failed to create invoice", details: err.message });
   }
 };
+
 
 exports.getPendingInvoices = async (req, res) => {
   try {
