@@ -702,8 +702,6 @@ exports.updateLeadResponse = async (req, res) => {
       return res.status(404).json({ message: "Lead not found" });
     }
 
-     global.io.emit('leadUpdated', populatedLead);
-
     res.json({ message: "Lead updated successfully", lead: updated });
   } catch (err) {
     console.error("Error in updateLeadResponse:", err);
