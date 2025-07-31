@@ -195,6 +195,7 @@ exports.generateInvoicePDF = async (req, res) => {
     // Step 2: Send HTML to html2pdf.app to get PDF
     const pdfResponse = await axios.post('https://api.html2pdf.app/v1/generate', {
       html,
+      apiKey: process.env.HTML2PDF_API_KEY
     }, {
       responseType: 'arraybuffer', // important to get raw PDF bytes
       headers: {
