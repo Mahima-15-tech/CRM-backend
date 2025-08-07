@@ -252,6 +252,7 @@ app.use("/api/invoices", invoiceRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/reports', reportRoutes);
 app.use(adminRoutes);
+app.use("/api/test", require("./routes/test"));
 
 // ✅ Start server
 const PORT = process.env.PORT || 5000;
