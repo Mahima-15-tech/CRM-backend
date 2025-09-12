@@ -2,7 +2,7 @@
 const mongoose = require('mongoose');
 const FTAssignment = require('../models/FTAssignment');
 const Lead = require('../models/LeadUpload')
-const { ACCOUNT_ID } = require("../../crm-frontend/src/constants/profiles");
+const { ACCOUNT_ID } = require("../constants/profiles");
 
 
 

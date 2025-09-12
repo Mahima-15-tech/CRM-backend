@@ -7,7 +7,7 @@ const axios = require("axios");
 const numberToWords = require('number-to-words');
 const WebLead = require("../models/weblead");
 
-const { ACCOUNT_ID } = require("../../crm-frontend/src/constants/profiles");
+const { ACCOUNT_ID } = require("../constants/profiles");
 
 // const puppeteer = require('puppeteer');
 
