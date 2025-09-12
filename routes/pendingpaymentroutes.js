@@ -5,7 +5,7 @@ const PendingPaymentLead = require("../models/PendingPaymentLead");
 const Invoice = require("../models/Invoice");
 const Lead = require("../models/LeadUpload");
 const { authenticateUser, isAdmin } = require("../middleware/authMiddleware");
-const { ACCOUNT_ID } = require("../../crm-frontend/src/constants/profiles");
+const { ACCOUNT_ID } = require("../constants/profiles");
 
 // 1) Add Pending Lead manually (for testing / Postman)
 router.post("/pending-leads/add", authenticateUser, isAdmin, async (req, res) => {

@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { authenticateUser } = require("../middleware/authMiddleware");
 const { getDashboardStats } = require("../controllers/Accountdashboard");
-const { ACCOUNT_ID } = require("../../crm-frontend/src/constants/profiles");
+const { ACCOUNT_ID } = require("../constants/profiles");
 
 // custom middleware
 const isAdminOrAccounts = (req, res, next) => {
