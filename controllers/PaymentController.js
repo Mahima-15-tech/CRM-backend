@@ -6,7 +6,8 @@ const Lead = require("../models/LeadUpload");
 
 const Invoice = require("../models/Invoice");
 const WebLead = require("../models/weblead");
-const { ACCOUNT_ID } = require("../../crm-frontend/src/constants/profiles");
+const { ACCOUNT_ID } = require("../constants/profiles");
+
 
 
 
