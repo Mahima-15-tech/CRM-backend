@@ -1,11 +1,17 @@
-// models/KYC.js
+// models/KYC.js (update)
 const mongoose = require("mongoose");
 
 const kycSchema = new mongoose.Schema({
   leadId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: "Lead",
     required: true,
+    refPath: "leadModel"
+  },
+  leadModel: {
+    type: String,
+    required: true,
+    enum: ["Lead", "WebLead"],
+    default: "Lead"
   },
   raisedBy: {
     type: mongoose.Schema.Types.ObjectId,

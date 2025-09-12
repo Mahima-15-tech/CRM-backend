@@ -6,4 +6,5 @@ const { authenticateUser } = require("../middleware/authMiddleware");
 
 router.post('/api/admin/impersonate', authenticateUser, impersonateUser);
 
+
 module.exports = router;

@@ -10,6 +10,7 @@ const { authenticateUser } = require("../middleware/authMiddleware");
 
 // Create
 router.post("/add", invoiceController.addInvoice);
+router.post("/convert", authenticateUser, invoiceController.convertToClient);
 
 // Get pending for approval
 router.get("/pending", invoiceController.getPendingInvoices);
@@ -17,7 +18,7 @@ router.get("/pending", invoiceController.getPendingInvoices);
 // Get all invoices
 router.get("/all",authenticateUser, invoiceController.getAllInvoices);
 
-
+router.get("/mysubscription", authenticateUser, invoiceController.checkSubscription);
 
 // Update invoice (edit from modal)
 router.patch("/update/:id", invoiceController.updateInvoiceStatus);
@@ -37,19 +38,8 @@ router.put("/edit/:id", invoiceController.updateInvoice);
 // Get invoice by ID (for preview)
 router.get("/:id", invoiceController.getInvoiceById);
 
-// router.get('/invoice-pdf/:id', async (req, res) => {
-//     try {
-//       const invoice = await Invoice.findById(req.params.id).lean();
-//       if (!invoice) return res.status(404).send('Invoice not found');
-  
-//       res.setHeader('Content-Type', 'application/pdf');
-//       res.setHeader('Content-Disposition', `inline; filename=Invoice_${invoice.invoiceNumber}.pdf`);
-  
-//       generateInvoicePDF(invoice, res); // pipe directly to response
-//     } catch (err) {
-//       console.error(err);
-//       res.status(500).send('Error generating PDF');
-//     }
-//   });
+
+
+
 
 module.exports = router;

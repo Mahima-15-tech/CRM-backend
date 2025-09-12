@@ -4,8 +4,8 @@ const leadController = require("../controllers/leadController");
 const LeadUpload = require("../models/LeadUpload");
 const LeadSource = require('../models/LeadSource');
 const router = express.Router();
-const { uploadLeads, getLeadTypeCounts,getLeadsBySource,getUserLeadStats, getLeadSourceSummary,markLeadAsDeleted,getDeletedLeads,softDeleteLead,getDNDLeads,disposeBulkLeads,getSummaryReport, disposeLead,getDisposedLeads,getSingleLead, updateLead, getLeadsByUser,getAllLeads,getLeadCount,allotLeads, getUserTodaysFollowUps,markLeadAsDND, getLeadsForEmployee,getUnassignedSourceCounts, getFilteredLeads, fetchLeadsFromPool,  getLeadSourceCounts, getTotalLeadTypeCounts, updateLeadResponse, getOldLeadsByUser,  getAllOldLeads , saveTodaysFollowUp, saveFollowUp, getTodaysFollowUps, getUserFollowUps, getAdminFollowUps, transferBulkLeads,deleteFieldsFromLeads,deleteBulkLeads,permanentlyDeleteLeads, unallotLeads,exportLeads,getLeadsByResponse , } = require("../controllers/leadController");
-const { authenticateUser } = require("../middleware/authMiddleware");
+const { uploadLeads, getLeadTypeCounts,getLeadsBySource,getUserLeadStats, getLeadSourceSummary,markLeadAsDeleted,getDeletedLeads,softDeleteLead,getDNDLeads,disposeBulkLeads,getSummaryReport, disposeLead,getDisposedLeads,getSingleLead, updateLead, getLeadsByUser,getAllLeads,getLeadCount,allotLeads, getUserTodaysFollowUps,markLeadAsDND, getLeadsForEmployee,getUnassignedSourceCounts, getFilteredLeads, fetchLeadsFromPool,  getLeadSourceCounts, getTotalLeadTypeCounts, updateLeadResponse, getOldLeadsByUser,  getAllOldLeads , saveTodaysFollowUp, saveFollowUp, getTodaysFollowUps, getUserFollowUps, getAdminFollowUps, transferBulkLeads,deleteFieldsFromLeads,deleteBulkLeads,permanentlyDeleteLeads, unallotLeads,exportLeads,getLeadsByResponse,setLeadCredentials, } = require("../controllers/leadController");
+const { authenticateUser,  isAdmin  } = require("../middleware/authMiddleware");
 
 const upload = multer({ dest: "uploads/" });
 
@@ -51,7 +51,7 @@ router.get("/employee-summary/:employeeId", leadController.getEmployeeLeadSummar
 router.get("/employee-report", leadController.getEmployeeLeadReport);
 router.post('/by-response', leadController.getLeadsByResponse);
 router.get('/new-leads-count/:userId', leadController.getNewLeadsCountByUser);
-
+router.post('/leads/:leadId/set-credentials', authenticateUser, isAdmin, setLeadCredentials);
 // routes/leadRoutes.js or similar
 router.get('/user/:userId/stats', getUserLeadStats);
 

@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 
 const leadSchema = new mongoose.Schema({
   // Basic Info
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, // NEW
   name: { type: String, required: true },
   mobile: { type: String, required: true },
   email: String,

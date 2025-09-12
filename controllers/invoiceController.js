@@ -5,7 +5,9 @@ const path = require('path');
 const ejs = require('ejs');
 const axios = require("axios");
 const numberToWords = require('number-to-words');
+const WebLead = require("../models/weblead");
 
+const { ACCOUNT_ID } = require("../../crm-frontend/src/constants/profiles");
 
 // const puppeteer = require('puppeteer');
 
@@ -14,6 +16,7 @@ const Invoice = require("../models/Invoice");
 
 // const PDFDocument = require('pdfkit');
 const fs = require('fs');
+const LeadUpload = require('../models/LeadUpload');
 // const KYC = require("../models/KYC");
 
 
@@ -95,28 +98,74 @@ exports.updateInvoice = async (req, res) => {
 };
 
 
+exports.convertToClient = async (req, res) => {
+  try {
+    const { leadId } = req.body;
+
+    // ✅ WebLead find karo
+    const lead = await WebLead.findById(leadId);
+    if (!lead) return res.status(404).json({ message: "Lead not found" });
+
+    // ✅ Invoice create karo
+    const invoice = new Invoice({
+      clientName: lead.name,
+      mobile: lead.phone,
+      email: lead.email,
+      leadId: lead._id,
+      invoiceDate: new Date(),
+      startDate: new Date(),
+      endDate: new Date(new Date().setMonth(new Date().getMonth() + 1)), // 1 month example
+      status: "Running",
+      createdBy: req.user._id
+    });
+
+    await invoice.save();
+
+    // ✅ WebLead ka status update
+    lead.status = "client";
+    await lead.save();
+
+    res.json({ message: "Converted to client successfully", invoice });
+  } catch (error) {
+    console.error("ConvertToClient Error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
 
 
 /// controllers/invoiceController.js
+// controllers/invoiceController.js
 exports.approveOrDenyInvoice = async (req, res) => {
   try {
     const { statusType, value } = req.body;
 
-    const invoice = await Invoice.findById(req.params.id);
+    const invoice = await Invoice.findById(req.params.id).populate("createdBy"); 
     if (!invoice) return res.status(404).json({ message: "Invoice not found" });
 
-    invoice[statusType] = value;
-
-    // ✅ Main logic to update to Running
-  
+    if (statusType === "prStatus") {
+      if (value === "Complete") {
+        // ✅ Payment check
+        if (invoice.paid > 0) {
+          invoice.prStatus = "Complete";
+          invoice.status = "Running"; // approved
+        } else {
+          return res.status(400).json({ message: "Cannot approve invoice: Payment pending" });
+        }
+      } else if (value === "Rejected") {
+        invoice.prStatus = "Rejected";
+        invoice.status = "Pending"; // reset
+      }
+    }
 
     await invoice.save();
-    res.json({ success: true, message: `${statusType} updated to ${value}` });
+    res.json(invoice);
+
   } catch (err) {
-    console.error("Status update error:", err);
+    console.error(err);
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
 
 
@@ -131,13 +180,15 @@ exports.getAllInvoices = async (req, res) => {
       return res.status(401).json({ message: "Unauthorized: Role missing" });
     }
 
-    if (userRole.toLowerCase() !== "admin") {
-      filter.createdBy = userId;
+    // ✅ Admin aur Accounts dono ko full access
+    if (userRole.toLowerCase() !== "admin" && req.user?.profileId?.toString() !== ACCOUNT_ID) {
+      filter.createdBy = userId; // Normal users → apne invoices
     }
 
     const invoices = await Invoice.find(filter)
       .sort({ createdAt: -1 })
-      .populate("createdBy", "name username"); // ✅ add this line
+      .populate("createdBy", "name username");
+
     res.json(invoices);
   } catch (err) {
     console.error("❌ Invoice fetch error:", err);
@@ -148,86 +199,42 @@ exports.getAllInvoices = async (req, res) => {
 
 
 
-// exports.generateInvoicePDF = async (req, res) => {
-//   try {
-//     const invoice = await Invoice.findById(req.params.id).lean();
-//     if (!invoice) return res.status(404).send('Invoice not found');
-
-//     // Use cloud image URL instead of local file
-//     const logoUrl = 'https://res.cloudinary.com/dxw8erwq9/image/upload/v1753950744/logo_pnytco.jpg';
-
-//     const html = await ejs.renderFile(
-//       path.join(__dirname, '../utils/invoice-template.ejs'),
-//       { invoice, logoUrl }
-//     );
-
-//   const browser = await puppeteer.launch({
-//   headless: true,
-//   args: ['--no-sandbox', '--disable-setuid-sandbox'],
-// });
-
-//     const page = await browser.newPage();
-//     await page.setContent(html, { waitUntil: 'networkidle0' });
-
-//     const pdfBuffer = await page.pdf({
-//       format: 'A4',
-//       printBackground: true
-//     });
-
-//     await browser.close();
-
-//     res.setHeader('Content-Type', 'application/pdf');
-//     res.setHeader('Content-Disposition', `attachment; filename=${invoice.invoiceNumber}.pdf`);
-//     res.send(pdfBuffer);
-
-//   } catch (err) {
-//     console.error('PDF generation error:', err);
-//     res.status(500).send('Failed to generate PDF');
-//   }
-// };
-
-
 
 exports.generateInvoicePDF = async (req, res) => {
   try {
     const invoice = await Invoice.findById(req.params.id).lean();
-    invoice.amountInWords = numberToWords.toWords(invoice.paid) + " only";
+    if (!invoice) return res.status(404).send("Invoice not found");
 
-    if (!invoice) return res.status(404).send('Invoice not found');
+    invoice.amountInWords = "Rupees " + invoice.paid + " only";
+    const logoUrl = "https://res.cloudinary.com/dxw8erwq9/image/upload/v1756989206/logo_fcgpvo.jpg";
 
-    const logoUrl = 'https://res.cloudinary.com/dxw8erwq9/image/upload/v1753950744/logo_pnytco.jpg';
+    const templatePath = path.join(__dirname, "../utils/invoice-template.ejs");
+    const html = await ejs.renderFile(templatePath, { invoice, logoUrl });
 
-    // Step 1: Render HTML as string
-    const html = await ejs.renderFile(
-      path.join(__dirname, '../utils/invoice-template.ejs'),
-      { invoice, logoUrl }
+    const pdfResponse = await axios.post(
+      "https://api.html2pdf.app/v1/generate",
+      {
+        html,
+        apiKey: process.env.HTML2PDF_API_KEY,
+      },
+      {
+        responseType: "arraybuffer",
+        headers: { "Content-Type": "application/json" },
+      }
     );
 
-    // Step 2: Send HTML to html2pdf.app to get PDF
-    const pdfResponse = await axios.post('https://api.html2pdf.app/v1/generate', {
-      
-      html,
-      apiKey: '5P4ghNBXIeiwmPAjWfr787iv8r9yzd6HVg23ecKa5crLXOWwBfsDzO5GoIF4aNeh'
-    }, {
-      responseType: 'arraybuffer', // important to get raw PDF bytes
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
-
-    console.log('API key:', process.env.HTML2PDF_API_KEY)
-
-
-    // Step 3: Send back PDF
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename=${invoice.invoiceNumber}.pdf`);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename=${invoice.invoiceNumber || "invoice"}.pdf`
+    );
     res.send(pdfResponse.data);
-
   } catch (err) {
-    console.error('PDF generation error:', err);
-    res.status(500).send('Failed to generate PDF');
+    console.error("PDF generation error:", err.response?.data || err.message);
+    res.status(500).send("Failed to generate PDF");
   }
 };
+
 
 
 // Add this to invoiceController.js
@@ -276,5 +283,63 @@ if (req.user?.role !== "Admin") {
   } catch (error) {
     console.error("Client count error:", error);
     res.status(500).json({ success: false, error: "Failed to get invoice" });
+  }
+};
+
+
+// ✅ GET /api/invoices/mysubscription
+exports.checkSubscription = async (req, res) => {
+  try {
+    const today = new Date();
+
+    // WebLead linked to user
+    const weblead = await WebLead.findOne({ userId: req.user._id });
+
+    // LeadUpload linked to user
+    const leadUpload = await LeadUpload.findOne({ mobile: req.user.phone });
+
+    // LeadIds collect karo
+    const leadIds = [];
+    if (weblead) leadIds.push(weblead._id);
+    if (leadUpload) leadIds.push(leadUpload._id);
+
+    if (leadIds.length === 0) {
+      return res.json({
+        subscribed: false,
+        message: "No linked lead/weblead found",
+        pastServices: []
+      });
+    }
+
+    // Active invoice dhoondo
+    const activeInvoice = await Invoice.findOne({
+      leadId: { $in: leadIds },
+      status: "Running",
+      startDate: { $lte: today },
+      endDate: { $gte: today },
+    });
+
+    // Past invoices (expired services)
+    const pastInvoices = await Invoice.find({
+      leadId: { $in: leadIds },
+      endDate: { $lt: today }
+    }).sort({ endDate: -1 }); // latest expired first
+
+    if (activeInvoice) {
+      return res.json({
+        subscribed: true,
+        invoice: activeInvoice,
+        pastServices: pastInvoices
+      });
+    } else {
+      return res.json({
+        subscribed: false,
+        pastServices: pastInvoices
+      });
+    }
+
+  } catch (err) {
+    console.error("Subscription check error:", err);
+    res.status(500).json({ subscribed: false, error: "Server error" });
   }
 };

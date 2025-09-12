@@ -19,6 +19,7 @@ const invoiceSchema = new mongoose.Schema({
   startDate: Date,
   endDate: Date,
   duration: String,
+  status: "Running"   ,
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
@@ -43,6 +44,8 @@ const invoiceSchema = new mongoose.Schema({
   ref: "Lead",
   required: true,
 },
+
+
 
 }, {
   timestamps: true

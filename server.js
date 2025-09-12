@@ -159,6 +159,12 @@ const invoiceRoutes = require("./routes/invoiceroutes");
 const userRoutes = require('./routes/userroutes');
 const reportRoutes = require('./routes/reportRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const whatsappRoute = require('./routes/whatsapproute');
+const messageRoutes = require('./routes/MessageRoutes');
+const otpAuth = require('./routes/otpAuth');
+const kycClientRoutes = require("./routes/kycClientRoutes");
+// const weblead = require('./routes/webLeadRoutes');
+
 
 const app = express();
 
@@ -253,6 +259,17 @@ app.use('/api/users', userRoutes);
 app.use('/api/reports', reportRoutes);
 app.use(adminRoutes);
 app.use("/api/test", require("./routes/test"));
+app.use("/api/whatsapp", whatsappRoute);
+app.use("/api", messageRoutes);
+app.use('/api/auth', otpAuth);
+app.use("/api/webleads", require("./routes/webLeadRoutes"));
+app.use("/api/client", require("./routes/clientRoutes"));
+app.use("/api/services", require("./routes/Service"));
+app.use("/api/Payments", require("./routes/ClientPaymentRoute"));
+app.use("/api/admin", require("./routes/pendingpaymentroutes"));
+app.use("/api/kycclient", kycClientRoutes);
+app.use("/api/accountdashboard", require("./routes/Accountdashboardroutes"));
+
 
 // ✅ Start server
 const PORT = process.env.PORT || 5000;

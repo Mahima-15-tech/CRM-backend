@@ -15,7 +15,7 @@ router.get("/admin/pending", authenticateUser, paymentController.getPendingPayme
 // Admin - bulk approve/deny payments
 router.post("/admin/bulk-update", authenticateUser, paymentController.bulkUpdatePaymentStatus);
 
-router.get("/admin/all", authenticateUser, paymentController.getAllApprovedPayments);
+router.get("/all-approved", authenticateUser, paymentController.getAllApprovedPayments);
 
 router.get("/sales-report", authenticateUser, paymentController.getSalesReport);
 

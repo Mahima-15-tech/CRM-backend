@@ -9,14 +9,16 @@ const fs = require('fs');
 
 exports.createKYCEntry = async (req, res) => {
   try {
-    const { leadId, raisedBy } = req.body;
-    const lead = await Lead.findById(leadId);
+    const { leadId, raisedBy, leadModel = "Lead" } = req.body;
+    const LeadModel = leadModel === "WebLead" ? require("../models/weblead") : require("../models/LeadUpload");
+    const lead = await LeadModel.findById(leadId);
 
     const newEntry = new KYC({
       leadId,
+      leadModel,
       raisedBy,
-      pancard: lead.pan,
-      dob: lead.dob,
+      pancard: lead?.pan || "",
+      dob: lead?.dob || null,
     });
 
     await newEntry.save();
@@ -26,6 +28,7 @@ exports.createKYCEntry = async (req, res) => {
     res.status(500).json({ success: false });
   }
 };
+
 
 exports.getKYCByStatus = async (req, res) => {
   try {
@@ -129,3 +132,42 @@ exports.updateKYCStatus = async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
+
+
+exports.uploadMultipleKYC = async (req, res) => {
+  try {
+    const { fullName, dob } = req.body;
+    const files = req.files; // 👈 multer se aayenge
+
+    const uploadedFiles = {};
+
+  for (let field in files) {
+  const file = files[field][0];
+  const result = await new Promise((resolve, reject) => {
+    cloudinary.uploader.upload_stream(
+      { folder: "kyc" },
+      (error, result) => {
+        if (error) return reject(error);
+        resolve(result);
+      }
+    ).end(file.buffer);
+  });
+  uploadedFiles[field] = result.secure_url;
+}
+
+
+    // ✅ Save in DB
+    const kyc = await KYC.create({
+      fullName,
+      dob,
+      ...uploadedFiles
+    });
+
+    res.json({ success: true, kyc });
+  } catch (err) {
+    console.error("KYC upload error:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+

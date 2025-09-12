@@ -1,3 +1,4 @@
+// models/Payment.js (update)
 const mongoose = require("mongoose");
 
 const paymentEntrySchema = new mongoose.Schema({
@@ -15,8 +16,14 @@ const paymentEntrySchema = new mongoose.Schema({
 const paymentSchema = new mongoose.Schema({
   leadId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: "Lead",
     required: true,
+    refPath: "leadModel"   // <- dynamic ref
+  },
+  leadModel: {             // store model name: "Lead" or "WebLead"
+    type: String,
+    required: true,
+    enum: ["Lead", "WebLead"],
+    default: "Lead"
   },
   raisedBy: {
     type: mongoose.Schema.Types.ObjectId,
@@ -28,17 +35,15 @@ const paymentSchema = new mongoose.Schema({
   description: String,
   date: Date,
   entries: [paymentEntrySchema],
-
   amountReceived: Number,
   serviceCharge: Number,
   igst: Number,
   totalPaid: Number,
   status: {
-  type: String,
-  enum: ["Pending", "Approved", "Denied"],
-  default: "Pending"
-},
-
+    type: String,
+    enum: ["Pending", "Approved", "Denied"],
+    default: "Pending"
+  },
 }, { timestamps: true });
 
 module.exports = mongoose.model("Payment", paymentSchema);

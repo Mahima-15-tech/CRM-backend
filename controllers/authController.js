@@ -1,29 +1,186 @@
+// const User = require('../models/User');
+// const bcrypt = require('bcryptjs');
+// const jwt = require('jsonwebtoken');
+// const Permission = require ('../models/Permission')
+// const EmployeeData =  require('../models/employeedata')
+// const crypto = require('crypto');
+// const transporter = require("../config/email");
+
+
+// exports.registerUser = async (req, res) => {
+//   try {
+//     const { name, username, email, phone, password, role, profileId } = req.body;
+
+//     const userExists = await User.findOne({ username });
+//     if (userExists)
+//       return res.status(400).json({ message: 'Username already exists' });
+
+//     const hashedPassword = await bcrypt.hash(password, 10);
+
+//     const adminProfileId = '6842c8659b2014211cff9033'; // default Admin profileId
+
+//     const finalProfileId = role === 'admin' ? profileId || adminProfileId : profileId;
+
+//     const user = new User({
+//       name,
+//       username,
+//       email,
+//       phone,
+//       password: hashedPassword,
+//       role,
+//       profileId: finalProfileId,
+//     });
+
+//     await user.save();
+
+//     res.status(201).json({ message: 'User registered successfully' });
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// };
+
+
+// exports.loginUser = async (req, res) => {
+//   try {
+//     const { username, password } = req.body;
+
+//     const user = await User.findOne({ username });
+//     if (!user)
+//       return res.status(400).json({ message: 'Invalid username or password' });
+
+//     if (user.status === false) {
+//       return res.status(403).json({ message: 'Your account is deactivated. Please contact admin.' });
+//     }
+
+//     const isMatch = await bcrypt.compare(password, user.password);
+//     if (!isMatch)
+//       return res.status(400).json({ message: 'Invalid username or password' });
+
+//     const token = jwt.sign(
+//       {
+//        userId: user._id,
+//         username: user.username,
+//         profileId: user.profileId,
+//         role: user.role,
+//       },
+//       process.env.JWT_SECRET,
+//       { expiresIn: '1d' }
+//     );
+
+//     // ✅ Fetch employee to get photo
+//     const EmployeeData = require('../models/employeedata');
+//     const employee = await EmployeeData.findOne({ user: user._id });
+
+//     const permissions = await Permission.find({ profileId: user.profileId, status: true });
+
+//     res.json({
+//       token,
+//       user: {
+//         id: user._id, // keep as is
+//         _id: user._id, 
+//         name: user.name,
+//         role: user.role,
+//         profileId: user.profileId,
+//         permissions,
+//         photo: employee?.photo || null, // ✅ now safe
+//       },
+//     });
+//   } catch (err) {
+//     console.error('❌ Login error:', err);
+//     res.status(500).json({ error: err.message });
+//   }
+// };
+
+
+// exports.forgotPassword = async (req, res) => {
+//   try {
+//     const { email } = req.body;
+//     const user = await User.findOne({ email }); // ya email field use ho
+
+//     if (!user) return res.status(404).json({ message: "User not found" });
+
+//     const resetToken = jwt.sign(
+//       { id: user._id },
+//       process.env.JWT_SECRET,
+//       { expiresIn: "15m" }
+//     );
+
+//     const resetUrl = `http://localhost:5173/reset-password/${resetToken}`;
+
+//     // ✅ Send Email
+//     await transporter.sendMail({
+//       from: `"Support" <${process.env.SMTP_USER}>`,
+//       to: email,
+//       subject: "Password Reset Request",
+//       html: `<p>Click the link below to reset your password:</p>
+//              <a href="${resetUrl}">${resetUrl}</a>`,
+//     });
+
+//     res.json({ message: "Reset link sent to email" });
+//   } catch (err) {
+//     console.error("Forgot Password Error:", err);
+//     res.status(500).json({ error: "Something went wrong" });
+//   }
+// };
+
+// // ✅ Reset Password
+// // ✅ Reset Password
+// exports.resetPassword = async (req, res) => {
+//   try {
+//     const { token } = req.params;
+//     const { password } = req.body;
+
+//     // Verify JWT
+//     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+//     const user = await User.findById(decoded.id);
+//     if (!user) return res.status(400).json({ message: 'Invalid or expired token' });
+
+//     const hashedPassword = await bcrypt.hash(password, 10);
+//     user.password = hashedPassword;
+//     await user.save();
+
+//     res.json({ message: 'Password reset successful' });
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// };
+
+
+
+
 const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const Permission = require ('../models/Permission')
-const EmployeeData =  require('../models/employeedata')
+const Permission = require('../models/Permission');
+const EmployeeData = require('../models/employeedata');
+const transporter = require("../config/email");
+const WebLead = require("../models/weblead");
 
 
+// ✅ Signup / Register
 exports.registerUser = async (req, res) => {
   try {
-    const { name, username, password, role, profileId } = req.body;
+    const { name, username, email, phone, password, role, profileId } = req.body;
 
     const userExists = await User.findOne({ username });
-    if (userExists)
+    if (userExists) {
       return res.status(400).json({ message: 'Username already exists' });
+    }
+
+    // if (!email) return res.status(400).json({ message: "Email is required" });
+
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const adminProfileId = '6842c8659b2014211cff9033'; // replace this with real Admin profileId
-
-    // ✅ Auto-assign Admin profileId if not provided
-    const finalProfileId =
-      role === 'admin' ? profileId || adminProfileId : profileId;
+    const adminProfileId = '6842c8659b2014211cff9033'; // default Admin profileId
+    const finalProfileId = role === 'admin' ? (profileId || adminProfileId) : profileId;
 
     const user = new User({
       name,
       username,
+      email,
+      phone,
       password: hashedPassword,
       role,
       profileId: finalProfileId,
@@ -31,31 +188,48 @@ exports.registerUser = async (req, res) => {
 
     await user.save();
 
+    const lead = new WebLead({
+       userId: user._id,
+  name,
+  username,
+  email,
+  phone,
+  role,
+});
+await lead.save();
+
+
+
     res.status(201).json({ message: 'User registered successfully' });
   } catch (err) {
+    console.error("❌ Signup error:", err);
     res.status(500).json({ error: err.message });
   }
 };
 
+// ✅ Login
+// ✅ Login
 exports.loginUser = async (req, res) => {
   try {
     const { username, password } = req.body;
 
     const user = await User.findOne({ username });
-    if (!user)
+    if (!user) {
       return res.status(400).json({ message: 'Invalid username or password' });
+    }
 
     if (user.status === false) {
       return res.status(403).json({ message: 'Your account is deactivated. Please contact admin.' });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch)
+    if (!isMatch) {
       return res.status(400).json({ message: 'Invalid username or password' });
+    }
 
     const token = jwt.sign(
       {
-       userId: user._id,
+        userId: user._id,
         username: user.username,
         profileId: user.profileId,
         role: user.role,
@@ -64,26 +238,27 @@ exports.loginUser = async (req, res) => {
       { expiresIn: '1d' }
     );
 
-    // ✅ Fetch employee to get photo
-    const EmployeeData = require('../models/employeedata');
     const employee = await EmployeeData.findOne({ user: user._id });
 
-    const permissions = await Permission.find({ profileId: user.profileId, status: true });
+    // ✅ safe check for client (profileId can be null)
+    const permissions = user.profileId
+      ? await Permission.find({ profileId: user.profileId, status: true })
+      : [];
 
     res.json({
       token,
       user: {
-        id: user._id, // keep as is
-        _id: user._id, 
+        id: user._id,
+        _id: user._id,
         name: user.name,
         role: user.role,
         profileId: user.profileId,
         permissions,
-        photo: employee?.photo || null, // ✅ now safe
+        photo: employee?.photo || null,
       },
     });
   } catch (err) {
-    console.error('❌ Login error:', err);
+    console.error('❌ Login error:', err.message);
     res.status(500).json({ error: err.message });
   }
 };

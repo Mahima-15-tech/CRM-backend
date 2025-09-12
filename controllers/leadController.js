@@ -10,6 +10,7 @@ const Invoice = require("../models/Invoice");
 const KYC = require("../models/KYC");
 const moment = require("moment");
 const User = require("../models/User");
+const bcrypt = require('bcryptjs');
 
 
 exports.uploadLeads = async (req, res) => {
@@ -2175,5 +2176,51 @@ exports.getNewLeadsCountByUser = async (req, res) => {
   } catch (err) {
     console.error("Error counting new leads:", err);
     res.status(500).json({ message: "Error counting new leads" });
+  }
+};
+
+
+exports.setLeadCredentials = async (req, res) => {
+  try {
+    const { leadId } = req.params;
+    const { username, password } = req.body;
+
+    if (!username || !password)
+      return res.status(400).json({ message: "Username and password required" });
+
+    // 1. Find lead
+    const lead = await LeadUpload.findById(leadId);
+    if (!lead) return res.status(404).json({ message: "Lead not found" });
+
+    // 2. Check if user exists (by phone)
+    let user = await User.findOne({ phone: lead.mobile });
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    if (user) {
+      // update username/password only
+      user.username = username;
+      user.password = hashedPassword;
+      await user.save();
+    } else {
+      // create new user with role = "client"
+      user = await User.create({
+        name: lead.name,
+        username,
+        password: hashedPassword,
+        phone: lead.mobile,
+        email: lead.email,
+        role: "client",
+      });
+    }
+
+    // 3. IMPORTANT: link lead -> user
+    lead.userId = user._id;
+    await lead.save();
+
+    res.json({ message: "Credentials set successfully", user });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
   }
 };
